@@ -1,0 +1,10 @@
+[user]
+	email = josiah.bull7@gmail.com
+	name = Josiah Bull
+	signingkey = 78BC8DC98E6A1224
+[gpg]
+	program = gpg2
+[commit]
+	gpgsign = true
+[url "ssh://git@github.com/"]
+	insteadOf = https://github.com/
