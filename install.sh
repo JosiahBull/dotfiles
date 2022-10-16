@@ -6,12 +6,12 @@ tmpdir=`mktemp -d`
 # check if dnf command exists
 if command -v dnf &> /dev/null
 then
-    sudo dnf install -y zsh vim tmux curl neovim thefuck git gpg
+    sudo dnf install -y zsh vim tmux curl neovim thefuck git gpg python3
     echo "dnf complete"
 # check if apt command exists
 elif command -v apt &> /dev/null
 then
-    sudo apt install -y zsh vim tmux curl neovim thefuck git gpg
+    sudo apt install -y zsh vim tmux curl neovim thefuck git gpg python3
     echo "apt complete"
 else
     echo "Could not install packages no package manager found"
@@ -36,13 +36,22 @@ cp -r $tmpdir/.scripts $HOME/.scripts
 cp $tmpdir/zsh/.zshrc $HOME/.zshrc
 cp $tmpdir/zsh/.zsh_aliases $HOME/.zsh_aliases
 cp $tmpdir/zsh/.p10k.zsh $HOME/.p10k.zsh
-cp -r $tmpdir/zsh/.oh-my-zsh $HOME/.oh-my-zsh
+cp -r $tmpdir/zsh/oh-my-zsh $HOME/.oh-my-zsh
 
 # install ssh and git settings
 cp $tmpdir/git/.gitconfig $HOME/.gitconfig
 
-# copy ssh keys from https://github.com/josiahBull.keys to ~/.ssh/authoized_keys
+# copy ssh keys from https://github.com/josiahBull.keys to ~/.ssh/authorized_keys
 curl https://github.com/josiahbull.keys >> ~/.ssh/authorized_keys
+
+# add a cronjob to update the ssh keys every 48 hours
+# echo "0 */48 * * * curl https://github.com/josiahbull.keys > ~/.ssh/authorized_keys" | crontab -
+
+# Install NVM
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.2/install.sh | bash
+source "$HOME/.nvm/nvm.sh"
+
+nvm install 'lts/*' --reinstall-packages-from=current
 
 # chsh to zsh
 sudo chsh $USER -s $(which zsh)
@@ -59,3 +68,6 @@ ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519 -C josiah
 # print the ed25519 public key and tell user to add it to the git server
 echo "Add the following public key to the github/gitlab/gitmedia repositories"
 cat ~/.ssh/id_ed25519.pub
+
+# clean up the temporary directory
+rm -rf $tmpdir
