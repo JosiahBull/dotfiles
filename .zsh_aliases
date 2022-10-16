@@ -1,6 +1,0 @@
-alias lh='ls -lhrt'
-alias c='clear'
-alias v='vim'
-alias di='sudo dnf install'
-alias config='/usr/bin/git --git-dir=$HOME/.dotfiles/ --work-tree=$HOME'
-alias rmd='yes | rm -r'
