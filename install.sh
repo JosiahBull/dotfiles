@@ -60,7 +60,7 @@ sudo chsh $USER -s $(which zsh)
 curl https://sh.rustup.rs -sSf | sh -s -- -y
 
 # install dds
-cargo install dds --git https://github.com/josiahbull/dds/
+~/.cargo/bin/cargo install dds --git https://github.com/josiahbull/dds/
 
 # create a new ed25519 keypair for this machine
 ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519 -C josiah
