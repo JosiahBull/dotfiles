@@ -6,12 +6,12 @@ tmpdir=`mktemp -d`
 # check if dnf command exists
 if command -v dnf &> /dev/null
 then
-    sudo dnf install -y zsh vim tmux curl neovim thefuck git gpg python3
+    sudo dnf install -y zsh vim tmux curl neovim thefuck git gpg python3 util-linux-user openssh-askpass
     echo "dnf complete"
 # check if apt command exists
 elif command -v apt &> /dev/null
 then
-    sudo apt install -y zsh vim tmux curl neovim thefuck git gpg python3
+    sudo apt install -y zsh vim tmux curl neovim thefuck git gpg python3 ssh-askpass
     echo "apt complete"
 else
     echo "Could not install packages no package manager found"
@@ -36,10 +36,10 @@ cp -r $tmpdir/.scripts $HOME/.scripts
 cp $tmpdir/zsh/.zshrc $HOME/.zshrc
 cp $tmpdir/zsh/.zsh_aliases $HOME/.zsh_aliases
 cp $tmpdir/zsh/.p10k.zsh $HOME/.p10k.zsh
-cp -r $tmpdir/zsh/oh-my-zsh $HOME/.oh-my-zsh
+cp -r $tmpdir/zsh/ohmyzsh $HOME/.oh-my-zsh
 
 # install ssh and git settings
-cp $tmpdir/git/.gitconfig $HOME/.gitconfig
+cp $tmpdir/.gitconfig $HOME/.gitconfig
 
 # copy ssh keys from https://github.com/josiahBull.keys to ~/.ssh/authorized_keys
 curl https://github.com/josiahbull.keys >> ~/.ssh/authorized_keys
