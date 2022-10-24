@@ -11,7 +11,7 @@ then
 # check if apt command exists
 elif command -v apt &> /dev/null
 then
-    sudo apt install -y zsh vim tmux curl neovim thefuck git gpg python3 ssh-askpass build-essential zsh-syntax-highlighting zsh-autosuggestions
+    sudo apt install -y zsh vim tmux curl neovim thefuck git gpg python3 ssh-askpass build-essential
     echo "apt complete"
 else
     echo "Could not install packages no package manager found"
@@ -39,6 +39,8 @@ cp $tmpdir/zsh/.p10k.zsh $HOME/.p10k.zsh
 cp -r $tmpdir/zsh/ohmyzsh $HOME/.oh-my-zsh
 
 git clone --depth=1 https://gitee.com/romkatv/powerlevel10k.git ${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/themes/powerlevel10k
+git clone https://github.com/zsh-users/zsh-autosuggestions ~/.oh-my-zsh/custom/plugins/zsh-autosuggestions
+git clone https://github.com/zsh-users/zsh-syntax-highlighting.git ~/.oh-my-zsh/custom/plugins/zsh-syntax-highlighting
 
 # install ssh and git settings
 cp $tmpdir/.gitconfig $HOME/.gitconfig
