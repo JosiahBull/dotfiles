@@ -11,7 +11,7 @@ then
 # check if apt command exists
 elif command -v apt &> /dev/null
 then
-    sudo apt install -y zsh vim tmux curl neovim thefuck git gpg python3 ssh-askpass
+    sudo apt install -y zsh vim tmux curl neovim thefuck git gpg python3 ssh-askpass build-essential
     echo "apt complete"
 else
     echo "Could not install packages no package manager found"
