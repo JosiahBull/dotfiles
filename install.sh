@@ -6,12 +6,12 @@ tmpdir=`mktemp -d`
 # check if dnf command exists
 if command -v dnf &> /dev/null
 then
-    sudo dnf install -y zsh vim tmux curl neovim thefuck git gpg python3 util-linux-user openssh-askpass
+    sudo dnf install -y zsh vim tmux curl neovim thefuck git gpg python3 util-linux-user openssh-askpass python3-pip
     echo "dnf complete"
 # check if apt command exists
 elif command -v apt &> /dev/null
 then
-    sudo apt install -y zsh vim tmux curl neovim thefuck git gpg python3 ssh-askpass build-essential
+    sudo apt install -y zsh vim tmux curl neovim thefuck git gpg python3 ssh-askpass build-essential python3-pip
     echo "apt complete"
 else
     echo "Could not install packages no package manager found"
