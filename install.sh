@@ -6,11 +6,13 @@ tmpdir=`mktemp -d`
 # check if dnf command exists
 if command -v dnf &> /dev/null
 then
+    sudo dnf update -y
     sudo dnf install -y zsh vim tmux curl neovim thefuck git gpg python3 util-linux-user openssh-askpass python3-pip
     echo "dnf complete"
 # check if apt command exists
 elif command -v apt &> /dev/null
 then
+    sudo apt-get update && sudo apt-get upgrade -y
     sudo apt install -y zsh vim tmux curl neovim thefuck git gpg python3 ssh-askpass build-essential python3-pip
     echo "apt complete"
 else
