@@ -14,13 +14,13 @@ then
         sudo /usr/bin/crb enable
     fi
 
-    sudo dnf install -y zsh vim tmux curl neovim git gpg python3 util-linux-user openssh-askpass python3-pip gcc
+    sudo dnf install -y zsh vim tmux curl neovim git gpg python3 util-linux-user openssh-askpass python3-pip gcc cmake tar
     echo "dnf complete"
 # check if apt command exists
 elif command -v apt &> /dev/null
 then
     sudo apt-get update && sudo apt-get upgrade -y
-    sudo apt install -y zsh vim tmux curl neovim git gpg python3 ssh-askpass build-essential python3-pip gcc
+    sudo apt install -y zsh vim tmux curl neovim git gpg python3 ssh-askpass build-essential python3-pip gcc cmake tar
     echo "apt complete"
 else
     echo "Could not install packages no package manager found"
