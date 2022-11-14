@@ -7,16 +7,38 @@ tmpdir=`mktemp -d`
 if command -v dnf &> /dev/null
 then
     sudo dnf update -y
-    sudo dnf install -y zsh vim tmux curl neovim thefuck git gpg python3 util-linux-user openssh-askpass python3-pip
+
+    # if rocky linux, install epel-release
+    if [ -f /etc/rocky-release ]; then
+        sudo dnf install -y epel-release
+        sudo /usr/bin/crb enable
+    fi
+
+    sudo dnf install -y zsh vim tmux curl neovim git gpg python3 util-linux-user openssh-askpass python3-pip
     echo "dnf complete"
 # check if apt command exists
 elif command -v apt &> /dev/null
 then
     sudo apt-get update && sudo apt-get upgrade -y
-    sudo apt install -y zsh vim tmux curl neovim thefuck git gpg python3 ssh-askpass build-essential python3-pip
+    sudo apt install -y zsh vim tmux curl neovim git gpg python3 ssh-askpass build-essential python3-pip
     echo "apt complete"
 else
     echo "Could not install packages no package manager found"
+    exit 1
+fi
+
+# if previous commands weren't successful, exit
+if [ $? -ne 0 ]; then
+    echo "Could not install packages"
+    exit 1
+fi
+
+# install python modules
+sudo pip3 install thefuck
+
+# if previous commands weren't successful, exit
+if [ $? -ne 0 ]; then
+    echo "Could not install python modules"
     exit 1
 fi
 
@@ -24,6 +46,12 @@ fi
 git clone https://github.com/JosiahBull/dotfiles $tmpdir
 cd $tmpdir
 git submodule update --init --recursive --depth 2
+
+# if previous commands weren't successful, exit
+if [ $? -ne 0 ]; then
+    echo "Could not clone repository"
+    exit 1
+fi
 
 # begin installation of dotfiles
 
