@@ -38,16 +38,11 @@ source $ZSH/oh-my-zsh.sh
 [[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh
 ZSH_AUTOSUGGEST_USE_ASYNC="true"
 
-eval $(thefuck --alias)
-
 setopt nocorrectall; setopt correct
 
 source $HOME/.zsh_aliases
 
-export NVM_DIR="$HOME/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"
+export PATH="$HOME/.scripts:$HOME/.local/bin:$PATH"
+eval $(thefuck --alias)
 
 export GPG_TTY=$(tty)
-
-export PATH="$HOME/.yarn/bin:$HOME/.config/yarn/global/node_modules/.bin:$PATH"
