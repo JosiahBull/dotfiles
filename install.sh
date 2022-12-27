@@ -26,7 +26,17 @@ then
 elif command -v apt &> /dev/null
 then
     sudo apt-get update && sudo apt-get upgrade -y
-    sudo apt install -y zsh vim tmux curl neovim git gpg python3 ssh-askpass build-essential python3-pip gcc cmake tar firefox
+
+    # if debian 11, install firefox-esr otherwise install firefox
+    if [ -f /etc/debian_version ]; then
+        if [ `cat /etc/debian_version | cut -d '.' -f 1` == "11" ]; then
+            sudo apt install -y firefox-esr
+        else
+            sudo apt install -y firefox
+        fi
+    fi
+
+    sudo apt install -y zsh vim tmux curl neovim git gpg python3 ssh-askpass build-essential python3-pip gcc cmake tar
     echo "apt complete"
 else
     echo "Could not install packages no package manager found"
