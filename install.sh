@@ -109,12 +109,7 @@ if [ -f /usr/bin/gnome-session ]; then
     # ctrl + shift + down arrow = volume down
     python3 $tmpdir/add_shortcut.py "volume down" "amixer -q set Master 5%-" "<Primary><Shift>Down"
     # ctrl + left = previous song
-    python3 $tmpdir/add_shortcut.py "previous song" "playerctl previous" "<Primary>Left"
-    # ctrl + right = next song
-    python3 $tmpdir/add_shortcut.py "next song" "playerctl next" "<Primary>Right"
-    # ctrl + down = pause/play
-    python3 $tmpdir/add_shortcut.py "pause/play" "playerctl play-pause" "<Primary>Down"
-
+    python3 $tmpdir/add_shortcut.py "previous song" "playerctl previous" "<Primary>Left"4. fix bug in dotfiles
     # install gnome extensions if the reduced flag isn't set
     if [ $reduced == false ]; then
         # save the current directory
@@ -164,16 +159,6 @@ ssh-add ~/.ssh/id_ed25519
 
 # add our own key to authorized_keys
 cat ~/.ssh/id_ed25519.pub >> ~/.ssh/authorized_keys
-
-# copy the new key to the clipboard
-# if xclip is installed, copy to clipboard
-if command -v xclip &> /dev/null
-then
-    cat ~/.ssh/id_ed25519.pub | xclip -selection clipboard
-
-# print the ed25519 public key and tell user to add it to the git server
-echo "Add the following public key to the github/gitlab/bitbucket repositories"
-cat ~/.ssh/id_ed25519.pub
 
 # clean up the temporary directory
 rm -rf $tmpdir
