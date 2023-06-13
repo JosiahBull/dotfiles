@@ -1,0 +1,52 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.4.0
+    hooks:
+      - id: check-yaml
+        exclude: ^(\./\.scripts/|\./zsh/ohmyzsh/|\./zsh/powerlevel10k/|zsh/\.p10k\.zsh)
+
+      - id: end-of-file-fixer
+        exclude: ^(\./\.scripts/|\./zsh/ohmyzsh/|\./zsh/powerlevel10k/|zsh/\.p10k\.zsh)
+
+      - id: trailing-whitespace
+        exclude: ^(\./\.scripts/|\./zsh/ohmyzsh/|\./zsh/powerlevel10k/|zsh/\.p10k\.zsh)
+
+      - id: debug-statements
+        exclude: ^(\./\.scripts/|\./zsh/ohmyzsh/|\./zsh/powerlevel10k/|zsh/\.p10k\.zsh)
+
+      - id: detect-private-key
+        exclude: ^(\./\.scripts/|\./zsh/ohmyzsh/|\./zsh/powerlevel10k/|zsh/\.p10k\.zsh)
+
+      - id: mixed-line-ending
+        args: [--fix=lf]
+        exclude: ^(\./\.scripts/|\./zsh/ohmyzsh/|\./zsh/powerlevel10k/|zsh/\.p10k\.zsh)
+
+      - id: pretty-format-json
+        args: [--autofix]
+        exclude: ^(\./\.scripts/|\./zsh/ohmyzsh/|\./zsh/powerlevel10k/|zsh/\.p10k\.zsh)
+
+      - id: requirements-txt-fixer
+        exclude: ^(\./\.scripts/|\./zsh/ohmyzsh/|\./zsh/powerlevel10k/|zsh/\.p10k\.zsh)
+
+      - id: check-case-conflict
+        exclude: ^(\./\.scripts/|\./zsh/ohmyzsh/|\./zsh/powerlevel10k/|zsh/\.p10k\.zsh)
+
+      - id: check-added-large-files
+        args: [--maxkb=1000]
+        exclude: ^(\./\.scripts/|\./zsh/ohmyzsh/|\./zsh/powerlevel10k/|zsh/\.p10k\.zsh)
+  - repo: https://github.com/psf/black
+    rev: 23.3.0
+    hooks:
+      - id: black
+        args: [--line-length=79]
+        exclude: ^(\./\.scripts/|\./zsh/ohmyzsh/|\./zsh/powerlevel10k/|zsh/\.p10k\.zsh)
+  - repo: https://github.com/PyCQA/flake8
+    rev: 6.0.0
+    hooks:
+      - id: flake8
+        exclude: ^(\./\.scripts/|\./zsh/ohmyzsh/|\./zsh/powerlevel10k/|zsh/\.p10k\.zsh)
+  - repo: https://github.com/koalaman/shellcheck-precommit
+    rev: v0.9.0
+    hooks:
+      - id: shellcheck
+        exclude: ^(\./\.scripts/|\./zsh/ohmyzsh/|\./zsh/powerlevel10k/|zsh/\.p10k\.zsh)

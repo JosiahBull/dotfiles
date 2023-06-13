@@ -1,3 +1,5 @@
+# shellcheck disable=SC1090,SC2034,SC1091,SC2148,SC2296,SC2296
+
 alias nzrc="nano ~/.zshrc"
 alias szrc="source ~/.zshrc"
 alias nsrc="nano ~/.ssh/config"
@@ -33,16 +35,17 @@ plugins=(
     zsh-autosuggestions
 )
 
-source $ZSH/oh-my-zsh.sh
+source "$ZSH/oh-my-zsh.sh"
 
 [[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh
 ZSH_AUTOSUGGEST_USE_ASYNC="true"
 
 setopt nocorrectall; setopt correct
 
-source $HOME/.zsh_aliases
+source "$HOME/.zsh_aliases"
 
 export PATH="$HOME/.scripts:$HOME/.local/bin:$PATH"
-eval $(thefuck --alias)
+eval "$(thefuck --alias)"
 
-export GPG_TTY=$(tty)
+GPG_TTY="$(tty)"
+export GPG_TTY
