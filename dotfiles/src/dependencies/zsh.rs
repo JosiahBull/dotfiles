@@ -256,6 +256,12 @@ impl Dependency for Zsh {
             }
         }
 
+        if !self.zshrc_present {
+
+
+
+        }
+
         todo!()
     }
 

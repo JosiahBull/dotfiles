@@ -1,8 +1,15 @@
-use async_trait::async_trait;
-use log::{warn, trace, debug};
+use std::{
+    process::Command,
+    sync::{Arc, RwLock, Weak},
+};
 
-use super::{Dependency, DependencyError, InstallationStatus};
-use crate::{OPERATING_SYSTEM, OperatingSystem, CURRENT_USER};
+use log::{debug, trace, warn};
+
+use super::{
+    DependencyError, DependencyGraph, DependencyInfo, DependencyInstallable, Installable,
+    InstallationStatus,
+};
+use crate::{OperatingSystem, CURRENT_USER, OPERATING_SYSTEM};
 
 #[derive(Debug)]
 pub struct Docker {
@@ -12,43 +19,76 @@ pub struct Docker {
     docker_service_enabled: bool,
     docker_service_running: bool,
     user_in_docker_group: bool,
+
+    // Dependency graph
+    self_ref: RwLock<Option<Arc<Docker>>>,
+    parents: RwLock<Vec<Weak<dyn DependencyGraph>>>,
+    children: RwLock<Vec<Arc<dyn DependencyGraph>>>,
+    is_enabled: RwLock<bool>,
 }
 
 impl Docker {
-    pub fn new() -> Self {
-        Self {
+    pub fn new() -> Arc<Self> {
+        let mut res = Arc::new(Self {
             current_version: None,
             repo_available: false,
             docker_installed: false,
             docker_service_enabled: false,
             docker_service_running: false,
             user_in_docker_group: false,
-        }
+
+            self_ref: RwLock::new(None),
+            parents: RwLock::new(Vec::new()),
+            children: RwLock::new(Vec::new()),
+            is_enabled: RwLock::new(false),
+        });
+
+        // set self reference
+        // let ptr = Arc::into_raw(res.clone());
+        *res.self_ref.write().unwrap() = Some(res.clone());
+
+        res
     }
 }
 
-#[async_trait]
-impl Dependency for Docker {
+impl DependencyInfo for Docker {
+    fn name(&self) -> &'static str {
+        "Docker"
+    }
+}
 
+impl DependencyInstallable for Docker {
+    /// Check if this package is installable on the current system.
+    fn installable(&self) -> Result<Installable, DependencyError> {
+        todo!()
+    }
+
+    /// Check if the dependency is installed on the current system.
+    /// Updates internal state to reflect the current status.
     /// Validates:
     /// - Docker is installed
     /// - Docker systemctl service is enabled
     /// - Docker systemctl service is running
     /// - Current user is in the docker group
-    async fn is_installed(&mut self) -> Result<InstallationStatus, DependencyError> {
+    fn is_installed(&mut self) -> Result<InstallationStatus, DependencyError> {
         // check if repo is available
         match *OPERATING_SYSTEM {
-            OperatingSystem::Ubuntu2204 | OperatingSystem::Ubuntu2004 | OperatingSystem::Ubuntu1804 | OperatingSystem::PopOS2104 => {
+            OperatingSystem::Ubuntu2204
+            | OperatingSystem::Ubuntu2004
+            | OperatingSystem::Ubuntu1804
+            | OperatingSystem::PopOS2104 => {
                 debug!("Checking if docker repo is available - ubuntu");
                 // check if docker repo is available
-                let output = tokio::process::Command::new("sh")
+                let output = Command::new("sh")
                     .arg("-c")
                     .arg("apt-cache policy docker-ce")
-                    .output()
-                    .await?;
+                    .output()?;
                 let stdout = String::from_utf8(output.stdout)?;
 
-                if !output.status.success() || stdout.is_empty() || !stdout.contains("Candidate: 5:") {
+                if !output.status.success()
+                    || stdout.is_empty()
+                    || !stdout.contains("Candidate: 5:")
+                {
                     trace!("Docker repo is not available");
                     self.repo_available = false;
                     return Ok(InstallationStatus::NotInstalled);
@@ -56,18 +96,20 @@ impl Dependency for Docker {
                     trace!("Docker repo is available");
                     self.repo_available = true;
                 }
-            },
+            }
             OperatingSystem::Fedora38 | OperatingSystem::Rocky8 | OperatingSystem::Rocky9 => {
                 debug!("Checking if docker repo is available - fedora38");
                 // check if docker repo is available
-                let output = tokio::process::Command::new("sh")
+                let output = Command::new("sh")
                     .arg("-c")
                     .arg("dnf list docker-ce")
-                    .output()
-                    .await?;
+                    .output()?;
                 let stdout = String::from_utf8(output.stdout)?;
 
-                if !output.status.success() || stdout.is_empty() || !stdout.contains("docker-ce.x86_64") {
+                if !output.status.success()
+                    || stdout.is_empty()
+                    || !stdout.contains("docker-ce.x86_64")
+                {
                     trace!("Docker repo is not available");
                     self.repo_available = false;
                     return Ok(InstallationStatus::NotInstalled);
@@ -75,17 +117,16 @@ impl Dependency for Docker {
                     trace!("Docker repo is available");
                     self.repo_available = true;
                 }
-            },
-            _ => return Err(DependencyError::UnsupportedOperatingSystem)
+            }
+            _ => return Err(DependencyError::UnsupportedOperatingSystem),
         }
 
         // Check if docker is installed
         debug!("Checking if docker is installed");
-        let output = tokio::process::Command::new("sh")
+        let output = Command::new("sh")
             .arg("-c")
             .arg("docker --version")
-            .output()
-            .await?;
+            .output()?;
         let stdout = String::from_utf8(output.stdout).unwrap();
 
         if !output.status.success() || stdout.is_empty() || !stdout.starts_with("Docker version") {
@@ -95,18 +136,22 @@ impl Dependency for Docker {
         } else {
             trace!("Docker is installed");
             self.docker_installed = true;
-            self.current_version = Some(stdout.split(' ').collect::<Vec<&str>>()[2].trim().replace(',', ""));
+            self.current_version = Some(
+                stdout.split(' ').collect::<Vec<&str>>()[2]
+                    .trim()
+                    .replace(',', ""),
+            );
         }
 
         // Check if docker systemctl service is enabled
         debug!("Checking if docker systemctl service is enabled");
-        let output = tokio::process::Command::new("sh")
+        let output = Command::new("sh")
             .arg("-c")
             .arg("systemctl is-enabled docker")
-            .output()
-            .await?;
+            .output()?;
 
-        if !output.status.success() || String::from_utf8(output.stdout).unwrap().trim() != "enabled" {
+        if !output.status.success() || String::from_utf8(output.stdout).unwrap().trim() != "enabled"
+        {
             trace!("Docker systemctl service is not enabled");
             self.docker_service_enabled = false;
         } else {
@@ -116,13 +161,13 @@ impl Dependency for Docker {
 
         // Check if docker systemctl service is running
         debug!("Checking if docker systemctl service is running");
-        let output = tokio::process::Command::new("sh")
+        let output = Command::new("sh")
             .arg("-c")
             .arg("systemctl is-active docker")
-            .output()
-            .await?;
+            .output()?;
 
-        if !output.status.success() || String::from_utf8(output.stdout).unwrap().trim() != "active" {
+        if !output.status.success() || String::from_utf8(output.stdout).unwrap().trim() != "active"
+        {
             trace!("Docker systemctl service is not running");
             self.docker_service_running = false;
         } else {
@@ -133,13 +178,18 @@ impl Dependency for Docker {
         // Check if current user is in the docker group
         debug!("Checking if current user is in the docker group");
         // sh -c "sudo su -c 'sh -c groups' $USER"
-        let output = tokio::process::Command::new("sh")
+        let output = Command::new("sh")
             .arg("-c")
             .arg(format!("sudo su -c 'sh -c groups' {}", *CURRENT_USER))
-            .output()
-            .await?;
+            .output()?;
 
-        if !output.status.success() || !String::from_utf8(output.stdout).unwrap().trim().split(' ').any(|x| x == "docker") {
+        if !output.status.success()
+            || !String::from_utf8(output.stdout)
+                .unwrap()
+                .trim()
+                .split(' ')
+                .any(|x| x == "docker")
+        {
             trace!("Current user is not in the docker group");
             self.user_in_docker_group = false;
         } else {
@@ -148,7 +198,12 @@ impl Dependency for Docker {
         }
 
         // check if any of the above are false
-        if !self.repo_available || !self.docker_installed || !self.docker_service_enabled || !self.docker_service_running || !self.user_in_docker_group {
+        if !self.repo_available
+            || !self.docker_installed
+            || !self.docker_service_enabled
+            || !self.docker_service_running
+            || !self.user_in_docker_group
+        {
             debug!("Docker is partially installed");
             return Ok(InstallationStatus::PartialInstall);
         }
@@ -157,7 +212,8 @@ impl Dependency for Docker {
         Ok(InstallationStatus::FullyInstalled)
     }
 
-    async fn install(&mut self, version: Option<&str>) -> Result<(), DependencyError> {
+    /// Install the dependency.
+    fn install(&mut self, version: Option<&str>) -> Result<(), DependencyError> {
         debug!("Installing docker using OS {:?}", *OPERATING_SYSTEM);
 
         if version.is_some() {
@@ -166,11 +222,19 @@ impl Dependency for Docker {
         }
 
         match *OPERATING_SYSTEM {
-            OperatingSystem::Ubuntu2204 | OperatingSystem::Ubuntu2004 | OperatingSystem::Ubuntu1804 | OperatingSystem::PopOS2104 => {
+            OperatingSystem::Ubuntu2204
+            | OperatingSystem::Ubuntu2004
+            | OperatingSystem::Ubuntu1804
+            | OperatingSystem::PopOS2104 => {
                 debug!("Installing docker - ubuntu");
                 // if already fully installed, return
-                if self.repo_available && self.docker_installed && self.docker_service_enabled && self.docker_service_running && self.user_in_docker_group {
-                    return Ok(())
+                if self.repo_available
+                    && self.docker_installed
+                    && self.docker_service_enabled
+                    && self.docker_service_running
+                    && self.user_in_docker_group
+                {
+                    return Ok(());
                 }
 
                 // if repo is not available, add it
@@ -179,15 +243,16 @@ impl Dependency for Docker {
 
                     // check ca-certificates, curl, gnupg are installed
                     trace!("Checking if ca-certificates, curl, gnupg are installed");
-                    let output = tokio::process::Command::new("sh")
+                    let output = Command::new("sh")
                         .arg("-c")
                         .arg("apt-get install -y apt-transport-https ca-certificates curl gnupg")
-                        .output()
-                        .await?;
+                        .output()?;
 
                     if !output.status.success() {
                         // XXX: add logging of output
-                        return Err(DependencyError::DependencyFailed("Missing or unable to install ca-certificates, curl, gnupg".to_string()))
+                        return Err(DependencyError::DependencyFailed(
+                            "Missing or unable to install ca-certificates, curl, gnupg".to_string(),
+                        ));
                     }
 
                     // add docker gpg key
@@ -195,36 +260,40 @@ impl Dependency for Docker {
                     // curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
                     // sudo chmod a+r /etc/apt/keyrings/docker.gpg
                     trace!("Adding docker gpg key");
-                    let output = tokio::process::Command::new("sh")
+                    let output = Command::new("sh")
                         .arg("-c")
                         .arg("install -m 0755 -d /etc/apt/keyrings")
-                        .output()
-                        .await?;
+                        .output()?;
 
                     if !output.status.success() {
-                        return Err(DependencyError::DependencyFailed("Unable to create /etc/apt/keyrings directory".to_string()))
+                        return Err(DependencyError::DependencyFailed(
+                            "Unable to create /etc/apt/keyrings directory".to_string(),
+                        ));
                     }
 
                     trace!("Adding docker gpg key");
-                    let output = tokio::process::Command::new("sh")
+                    let output = Command::new("sh")
                         .arg("-c")
                         .arg("curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg")
                         .output()
-                        .await?;
+                        ?;
 
                     if !output.status.success() {
-                        return Err(DependencyError::DependencyFailed("Unable to add docker gpg key".to_string()))
+                        return Err(DependencyError::DependencyFailed(
+                            "Unable to add docker gpg key".to_string(),
+                        ));
                     }
 
                     trace!("Adding docker gpg key");
-                    let output = tokio::process::Command::new("sh")
+                    let output = Command::new("sh")
                         .arg("-c")
                         .arg("chmod a+r /etc/apt/keyrings/docker.gpg")
-                        .output()
-                        .await?;
+                        .output()?;
 
                     if !output.status.success() {
-                        return Err(DependencyError::DependencyFailed("Unable to chmod docker gpg key".to_string()))
+                        return Err(DependencyError::DependencyFailed(
+                            "Unable to chmod docker gpg key".to_string(),
+                        ));
                     }
 
                     // add docker repo
@@ -232,27 +301,30 @@ impl Dependency for Docker {
                     // "deb [arch="$(dpkg --print-architecture)" signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
                     // "$(. /etc/os-release && echo "$VERSION_CODENAME")" stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
                     trace!("Adding docker repo");
-                    let output = tokio::process::Command::new("sh")
+                    let output = Command::new("sh")
                         .arg("-c")
                         .arg("echo \"deb [arch=\"$(dpkg --print-architecture)\" signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \"$(. /etc/os-release && echo \"$VERSION_CODENAME\")\" stable\" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null")
                         .output()
-                        .await?;
+                        ?;
 
                     if !output.status.success() {
-                        return Err(DependencyError::DependencyFailed("Unable to add docker repo".to_string()))
+                        return Err(DependencyError::DependencyFailed(
+                            "Unable to add docker repo".to_string(),
+                        ));
                     }
 
                     // update apt
                     // sudo apt-get update
                     trace!("Updating apt");
-                    let output = tokio::process::Command::new("sh")
+                    let output = Command::new("sh")
                         .arg("-c")
                         .arg("apt-get update")
-                        .output()
-                        .await?;
+                        .output()?;
 
                     if !output.status.success() {
-                        return Err(DependencyError::DependencyFailed("Unable to update apt".to_string()))
+                        return Err(DependencyError::DependencyFailed(
+                            "Unable to update apt".to_string(),
+                        ));
                     }
 
                     self.repo_available = true;
@@ -264,14 +336,16 @@ impl Dependency for Docker {
 
                     // sudo apt-get install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
                     trace!("Installing docker");
-                    let output = tokio::process::Command::new("sh")
+                    let output = Command::new("sh")
                         .arg("-c")
                         .arg("apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin")
                         .output()
-                        .await?;
+                        ?;
 
                     if !output.status.success() {
-                        return Err(DependencyError::DependencyFailed("Unable to install docker".to_string()))
+                        return Err(DependencyError::DependencyFailed(
+                            "Unable to install docker".to_string(),
+                        ));
                     }
 
                     self.docker_installed = true;
@@ -283,14 +357,15 @@ impl Dependency for Docker {
 
                     // sudo systemctl enable docker.service
                     trace!("Enabling docker service");
-                    let output = tokio::process::Command::new("sh")
+                    let output = Command::new("sh")
                         .arg("-c")
                         .arg("systemctl enable docker.service")
-                        .output()
-                        .await?;
+                        .output()?;
 
                     if !output.status.success() {
-                        return Err(DependencyError::DependencyFailed("Unable to enable docker service".to_string()))
+                        return Err(DependencyError::DependencyFailed(
+                            "Unable to enable docker service".to_string(),
+                        ));
                     }
 
                     self.docker_service_enabled = true;
@@ -302,14 +377,15 @@ impl Dependency for Docker {
 
                     // sudo systemctl start docker.service
                     trace!("Starting docker service");
-                    let output = tokio::process::Command::new("sh")
+                    let output = Command::new("sh")
                         .arg("-c")
                         .arg("systemctl start docker.service")
-                        .output()
-                        .await?;
+                        .output()?;
 
                     if !output.status.success() {
-                        return Err(DependencyError::DependencyFailed("Unable to start docker service".to_string()))
+                        return Err(DependencyError::DependencyFailed(
+                            "Unable to start docker service".to_string(),
+                        ));
                     }
 
                     self.docker_service_running = true;
@@ -321,34 +397,88 @@ impl Dependency for Docker {
 
                     // sudo usermod -aG docker $USER
                     trace!("Adding user to docker group");
-                    let output = tokio::process::Command::new("sh")
+                    let output = Command::new("sh")
                         .arg("-c")
                         .arg(format!("usermod -aG docker {}", *CURRENT_USER))
-                        .output()
-                        .await?;
+                        .output()?;
 
                     if !output.status.success() {
-                        return Err(DependencyError::DependencyFailed("Unable to add user to docker group".to_string()))
+                        return Err(DependencyError::DependencyFailed(
+                            "Unable to add user to docker group".to_string(),
+                        ));
                     }
 
                     self.user_in_docker_group = true;
                 }
 
                 Ok(())
-            },
+            }
             OperatingSystem::Fedora38 => {
                 todo!()
-            },
+            }
             OperatingSystem::Rocky8 => {
                 todo!()
-            },
+            }
             OperatingSystem::Rocky9 => {
                 todo!()
-            },
+            }
         }
     }
 
-    async fn uninstall(&mut self) -> Result<(), DependencyError> {
+    /// Uninstall the dependency.
+    fn uninstall(&mut self) -> Result<(), DependencyError> {
         unimplemented!("Docker uninstall not implemented");
+    }
+}
+
+impl DependencyGraph for Docker {
+    /// Get a list of all dependencies that this application requires
+    // fn dependencies<'b>(&'b self) -> &'b[&'b dyn DependencyGraph] {
+    //     self.children.read().unwrap().as_slice()
+    // }
+    fn dependencies(&self) -> Vec<Arc<dyn DependencyGraph>> {
+        self.children.read().unwrap().clone()
+    }
+
+    // /// Get a list of dependants that require this application
+    // fn dependants<'b>(&'b self) -> &'b[&'b dyn DependencyGraph<'a>] {
+    //     self.parents.read().unwrap().as_slice()
+    // }
+    fn dependants(&self) -> Vec<Weak<dyn DependencyGraph>> {
+        self.parents.read().unwrap().clone()
+    }
+
+    fn add_dependency(&self, dependency: Arc<dyn DependencyGraph>) {
+        let self_ref = self.self_ref.read().unwrap().clone().unwrap();
+        let self_ref = Arc::downgrade(&self_ref);
+        dependency.add_dependant(self_ref);
+        self.children.write().unwrap().push(dependency);
+    }
+
+    fn add_dependant(&self, dependant: Weak<dyn DependencyGraph>) {
+        self.parents.write().unwrap().push(dependant);
+    }
+
+    /// Enable or disable this dependency
+    fn set_enabled(&self, enabled: bool) {
+        *self.is_enabled.write().unwrap() = enabled;
+    }
+
+    /// Check if this dependency is enabled
+    fn is_enabled(&self) -> bool {
+        // check if this dependency is enabled
+        let enabled = *self.is_enabled.read().unwrap();
+        if !enabled {
+            return false;
+        }
+
+        // check if any children are disabled
+        for child in self.children.read().unwrap().iter() {
+            if !child.is_enabled() {
+                return false;
+            }
+        }
+
+        true
     }
 }

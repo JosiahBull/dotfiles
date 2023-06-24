@@ -13,20 +13,21 @@
 
 mod dependencies;
 
-use async_trait::async_trait;
+use lazy_static::lazy_static;
 use sudo::RunningAs;
 use sysinfo::SystemExt;
-use lazy_static::lazy_static;
-use dependencies::{docker::Docker, Dependency};
 
-use log::{LevelFilter, error, warn, info, debug, trace};
-
-use crate::dependencies::InstallationStatus;
+use log::{debug, error, info, trace, warn, LevelFilter};
 
 lazy_static! {
-    static ref OPERATING_SYSTEM: OperatingSystem = OperatingSystem::from_sysinfo().expect("Unable to determine operating system");
+    static ref OPERATING_SYSTEM: OperatingSystem =
+        OperatingSystem::from_sysinfo().expect("Unable to determine operating system");
     static ref CURRENT_USER: String = whoami::username();
-    static ref HOME_DIR: String = home::home_dir().expect("Unable to find home directory").to_str().expect("Unable to convert home directory to String").to_string();
+    static ref HOME_DIR: String = home::home_dir()
+        .expect("Unable to find home directory")
+        .to_str()
+        .expect("Unable to convert home directory to String")
+        .to_string();
 }
 
 #[derive(Debug)]
@@ -76,94 +77,61 @@ impl OperatingSystem {
                 "Linux 8 Rocky" => Ok(OperatingSystem::Rocky8),
 
                 "Linux 21.04 Pop!_OS" => Ok(OperatingSystem::PopOS2104),
-                _ => Err(DotfilesError::UnknownOperatingSystem(os))
+                _ => Err(DotfilesError::UnknownOperatingSystem(os)),
             }
         } else {
-            Err(DotfilesError::UnknownOperatingSystem("Unable to determine operating system".to_string()))
+            Err(DotfilesError::UnknownOperatingSystem(
+                "Unable to determine operating system".to_string(),
+            ))
         }
     }
 }
 
-trait DotfileStep: Dependencies {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
 
+
+    Ok(())
 }
 
-#[async_trait]
-trait Dependencies {
-    async fn install_dependencies(&self, operating_system: OperatingSystem) -> Result<(), DotfilesError>;
-}
+// fn main() {
+//     // TODO: setup clap to parse arguments,
+//     // TODO: setup reading from a version file that gets written
+//     // TODO: setup proper logging with a very aggressive log level
 
+//     //XXX: move configuration load into a separate function
+//     //XXX: setup cargo deny
 
+//     // pretty_env_logger::init();
+//     pretty_env_logger::formatted_builder()
+//         .filter_level(LevelFilter::Trace)
+//         .init();
 
-struct BaseRequirements;
+//     error!("This is an error!");
+//     warn!("This is a warn!");
+//     info!("This is an info!");
+//     debug!("This is a debug!");
+//     trace!("This is a trace!");
 
-#[async_trait]
-impl Dependencies for BaseRequirements {
-    async fn install_dependencies(&self, operating_system: OperatingSystem) -> Result<(), DotfilesError> {
-        match operating_system {
-            // match any ubuntu version
-            OperatingSystem::Ubuntu1804 | OperatingSystem::Ubuntu2004 | OperatingSystem::Ubuntu2204 => {
-                Ok(())
-            },
+//     let is_sudo = sudo::escalate_if_needed().unwrap();
+//     if is_sudo != RunningAs::Root {
+//         println!("This application requires root privileges to install dependencies");
+//         std::process::exit(1);
+//     }
 
-            OperatingSystem::Fedora38 => {
-                Ok(())
-            },
+//     let user = whoami::username();
+//     println!("Running as user: {}", user);
 
-            OperatingSystem::Rocky8 | OperatingSystem::Rocky9 => {
-                Ok(())
-            },
+//     // let mut d = Docker::new();
+//     // let is_installed = d.is_installed().await.unwrap();
 
-            OperatingSystem::PopOS2104 => {
-                Ok(())
-            },
+//     // println!("is_installed: {:?}", is_installed);
+//     // println!("things: {:?}", d);
 
-            _ => Err(DotfilesError::UnsupportedOperatingSystem)
-        }
-    }
-}
+//     // if ! matches!(is_installed, InstallationStatus::FullyInstalled) {
+//     //     println!("Installing docker");
+//     //     d.install(None).await.unwrap();
+//     // }
 
-#[tokio::main]
-async fn main() {
-    // TODO: setup clap to parse arguments,
-    // TODO: setup reading from a version file that gets written
-    // TODO: setup proper logging with a very aggressive log level
-
-    //XXX: move configuration load into a separate function
-    //XXX: setup cargo deny
-
-    // pretty_env_logger::init();
-    pretty_env_logger::formatted_builder().filter_level(LevelFilter::Trace).init();
-
-    error!("This is an error!");
-    warn!("This is a warn!");
-    info!("This is an info!");
-    debug!("This is a debug!");
-    trace!("This is a trace!");
-
-    let is_sudo = sudo::escalate_if_needed().unwrap();
-    if is_sudo != RunningAs::Root {
-        println!("This application requires root privileges to install dependencies");
-        std::process::exit(1);
-    }
-
-    let user = whoami::username();
-    println!("Running as user: {}", user);
-
-    let mut d = Docker::new();
-    let is_installed = d.is_installed().await.unwrap();
-
-    println!("is_installed: {:?}", is_installed);
-    println!("things: {:?}", d);
-
-    if ! matches!(is_installed, InstallationStatus::FullyInstalled) {
-        println!("Installing docker");
-        d.install(None).await.unwrap();
-    }
-
-    println!("is_installed: {:?}", d.is_installed().await.unwrap());
-    println!("things: {:?}", d);
-}
-
-
-
+//     // println!("is_installed: {:?}", d.is_installed().await.unwrap());
+//     // println!("things: {:?}", d);
+// }
