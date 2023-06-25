@@ -1,6 +1,6 @@
 use std::{
+    rc::{Rc, Weak},
     string::FromUtf8Error,
-    sync::{Arc, Weak},
 };
 
 pub mod docker;
@@ -67,7 +67,7 @@ pub trait DependencyInfo {
     // XXX: new?
 
     /// Get the name of the dependency.
-    fn name(&self) -> &'static str;
+    fn name(&self) -> &str;
     // XXX: handle versioning, etc
 }
 
@@ -86,35 +86,31 @@ pub trait DependencyInstallable {
     fn uninstall(&mut self) -> Result<(), DependencyError>;
 }
 
-pub trait DependencyGraph: std::fmt::Debug + Sync + Send {
+pub trait Dependency: std::fmt::Debug + DependencyInfo {
     /// Get a list of all dependencies that this application requires
     // fn dependencies<'b>(&'b self) -> &'b[&'b dyn DependencyGraph];
-    fn dependencies(&self) -> Vec<Arc<dyn DependencyGraph>>;
+    fn dependencies(&self) -> Vec<Rc<dyn Dependency>>;
 
     /// Get a list of dependants that require this application
-    fn dependants(&self) -> Vec<Weak<dyn DependencyGraph>>;
+    // FIXME: this can use self: Rc<Self> instead of &self
+    fn dependants(&self) -> Vec<Weak<dyn Dependency>>;
 
     /// Add a dependency to this application
-    fn add_dependency(&self, dependency: Arc<dyn DependencyGraph>);
+    fn add_dependency(&self, dependency: Rc<dyn Dependency>);
 
     /// Add a dependant to this application
-    fn add_dependant(&self, dependant: Weak<dyn DependencyGraph>);
+    fn add_dependant(&self, dependant: Weak<dyn Dependency>);
 
     /// Enable or disable this dependency
     fn set_enabled(&self, enabled: bool);
 
     /// Check if this dependency is enabled
-    // XXX: this might be able to have a default implementation, with a slight rename.
     fn is_enabled(&self) -> bool;
 }
 
-// auto implement it :)
-pub trait Dependency: DependencyInfo + DependencyInstallable + DependencyGraph {}
-impl<T> Dependency for T where T: DependencyInfo + DependencyInstallable + DependencyGraph {}
-
 #[cfg(test)]
 mod test_graphing_functions {
-    use super::DependencyGraph;
+    use super::Dependency;
 
     trait Graphable {
         fn name(&self) -> String;
@@ -123,4 +119,6 @@ mod test_graphing_functions {
     // fn isolate_for_display(top_level_dependencies: &[&dyn DependencyGraph], target_dependency: &str) -> Vec<Vec<Box<dyn Graphable>>> {
     //     // recursively walk the dependency graph, and find the target dependency
     // }
+
+    // TODO: testing
 }

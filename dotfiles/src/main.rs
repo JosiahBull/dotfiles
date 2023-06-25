@@ -11,13 +11,25 @@
 //      - Check if vim is configured correctly
 //      - Check if Docker is configured correctly
 
+mod app;
 mod dependencies;
+mod event;
+mod handler;
+mod tui;
+mod ui;
 
+use std::io;
+
+use app::{App, AppResult};
+use event::{Event, EventHandler};
+use handler::handle_key_events;
 use lazy_static::lazy_static;
+use ratatui::{backend::CrosstermBackend, Terminal};
 use sudo::RunningAs;
 use sysinfo::SystemExt;
 
 use log::{debug, error, info, trace, warn, LevelFilter};
+use tui::Tui;
 
 lazy_static! {
     static ref OPERATING_SYSTEM: OperatingSystem =
@@ -87,9 +99,32 @@ impl OperatingSystem {
     }
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() -> AppResult<()> {
+    // Create an application.
+    let mut app = App::new();
 
+    // Initialize the terminal user interface.
+    let backend = CrosstermBackend::new(io::stderr());
+    let terminal = Terminal::new(backend)?;
+    let events = EventHandler::new(500);
+    let mut tui = Tui::new(terminal, events);
+    tui.init()?;
 
+    // Start the main loop.
+    while app.running {
+        // Render the user interface.
+        tui.draw(&mut app)?;
+        // Handle events.
+        match tui.events.next()? {
+            Event::Tick => app.tick(),
+            Event::Key(key_event) => handle_key_events(key_event, &mut app)?,
+            Event::Mouse(_) => {}
+            Event::Resize(_, _) => {}
+        }
+    }
+
+    // Exit the user interface.
+    tui.exit()?;
     Ok(())
 }
 

@@ -1,13 +1,14 @@
 use std::{
     process::Command,
-    sync::{Arc, RwLock, Weak},
+    rc::{Rc, Weak},
+    sync::RwLock,
 };
 
 use log::{debug, trace, warn};
 
 use super::{
-    DependencyError, DependencyGraph, DependencyInfo, DependencyInstallable, Installable,
-    InstallationStatus,
+    DependencyError, DependencyInfo, DependencyInstallable, Installable,
+    InstallationStatus, Dependency,
 };
 use crate::{OperatingSystem, CURRENT_USER, OPERATING_SYSTEM};
 
@@ -21,15 +22,15 @@ pub struct Docker {
     user_in_docker_group: bool,
 
     // Dependency graph
-    self_ref: RwLock<Option<Arc<Docker>>>,
-    parents: RwLock<Vec<Weak<dyn DependencyGraph>>>,
-    children: RwLock<Vec<Arc<dyn DependencyGraph>>>,
+    self_ref: RwLock<Option<Rc<Docker>>>,
+    parents: RwLock<Vec<Weak<dyn Dependency>>>,
+    children: RwLock<Vec<Rc<dyn Dependency>>>,
     is_enabled: RwLock<bool>,
 }
 
 impl Docker {
-    pub fn new() -> Arc<Self> {
-        let mut res = Arc::new(Self {
+    pub fn new() -> Rc<Self> {
+        let mut res = Rc::new(Self {
             current_version: None,
             repo_available: false,
             docker_installed: false,
@@ -431,12 +432,12 @@ impl DependencyInstallable for Docker {
     }
 }
 
-impl DependencyGraph for Docker {
+impl Dependency for Docker {
     /// Get a list of all dependencies that this application requires
     // fn dependencies<'b>(&'b self) -> &'b[&'b dyn DependencyGraph] {
     //     self.children.read().unwrap().as_slice()
     // }
-    fn dependencies(&self) -> Vec<Arc<dyn DependencyGraph>> {
+    fn dependencies(&self) -> Vec<Rc<dyn Dependency>> {
         self.children.read().unwrap().clone()
     }
 
@@ -444,18 +445,18 @@ impl DependencyGraph for Docker {
     // fn dependants<'b>(&'b self) -> &'b[&'b dyn DependencyGraph<'a>] {
     //     self.parents.read().unwrap().as_slice()
     // }
-    fn dependants(&self) -> Vec<Weak<dyn DependencyGraph>> {
+    fn dependants(&self) -> Vec<Weak<dyn Dependency>> {
         self.parents.read().unwrap().clone()
     }
 
-    fn add_dependency(&self, dependency: Arc<dyn DependencyGraph>) {
+    fn add_dependency(&self, dependency: Rc<dyn Dependency>) {
         let self_ref = self.self_ref.read().unwrap().clone().unwrap();
-        let self_ref = Arc::downgrade(&self_ref);
+        let self_ref = Rc::downgrade(&self_ref);
         dependency.add_dependant(self_ref);
         self.children.write().unwrap().push(dependency);
     }
 
-    fn add_dependant(&self, dependant: Weak<dyn DependencyGraph>) {
+    fn add_dependant(&self, dependant: Weak<dyn Dependency>) {
         self.parents.write().unwrap().push(dependant);
     }
 

@@ -10,7 +10,7 @@ fn validate_design_one() {
         parents: RwLock<Vec<&'a Program<'a>>>,
         children: RwLock<Vec<&'a Program<'a>>>,
     }
-    
+
     impl<'a> Program<'a> {
         fn new(name: &str) -> Program<'a> {
             Program {
