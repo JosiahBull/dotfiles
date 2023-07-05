@@ -1,181 +1,91 @@
-use std::sync::RwLock;
+pub mod command;
+pub mod dependencies;
+pub mod system_data;
+pub mod tree;
 
+// Make all dependencies top-level for convenience
+pub use dependencies::*;
 
-#[test]
-fn validate_design_one() {
+// Other Imports
+use lazy_static::lazy_static;
+use sysinfo::SystemExt;
 
-    #[derive(Debug)]
-    struct Program<'a> {
-        name: String,
-        parents: RwLock<Vec<&'a Program<'a>>>,
-        children: RwLock<Vec<&'a Program<'a>>>,
-    }
+use crate::command::DCommand;
 
-    impl<'a> Program<'a> {
-        fn new(name: &str) -> Program<'a> {
-            Program {
-                name: name.to_string(),
-                parents: RwLock::new(Vec::new()),
-                children: RwLock::new(Vec::new()),
-            }
-        }
+// TODO: refactor into various supporting files //
 
-        fn add_child(&self, child: &'a Program<'a>) {
-            self.children.write().unwrap().push(child);
-        }
-    }
-
-    let docker = Program::new("docker");
-    let dep_a = Program::new("dep_a");
-    let dep_b = Program::new("dep_b");
-
-    dep_a.add_child(&dep_b);
-    docker.add_child(&dep_a);
-    docker.add_child(&dep_b);
-
-    println!("{:?}", docker);
+lazy_static! {
+    pub static ref OPERATING_SYSTEM: OperatingSystem =
+        OperatingSystem::from_sysinfo().expect("Unable to determine operating system");
+    pub static ref CURRENT_USER: String = {
+        // get the current user through sudo by checking SUDO_USER env var, if it doesn't exist
+        // then use whoami to acquire the current user and roll with that. :)
+        std::env::var("SUDO_USER").unwrap_or_else(|_|whoami::username())
+    };
+    pub static ref HOME_DIR: String = {
+        // Get home dir of *CURRENT_USER*
+        let res = DCommand::new("getent", &["passwd", &*CURRENT_USER])
+            .run()
+            .expect("able to run shell command");
+        assert!(res.success, "Unable to get home dir due to an error. Stdout {} stderr {}", res.stdout, res.stderr);
+        let home_dir: String = res.stdout.split(':').nth(5).unwrap().to_string();
+        home_dir
+    };
 }
 
-#[test]
-fn validate_design_two() {
-
-    #[derive(Debug)]
-    struct Program<'a> {
-        name: String,
-        parents: RwLock<Vec<&'a Program<'a>>>,
-        children: RwLock<Vec<&'a Program<'a>>>,
-    }
-
-    impl<'a> Program<'a> {
-        fn new(name: &str) -> Program<'a> {
-            Program {
-                name: name.to_string(),
-                parents: RwLock::new(Vec::new()),
-                children: RwLock::new(Vec::new()),
-            }
-        }
-
-        fn add_child(&'a self, child: &'a Program<'a>) {
-            self.children.write().unwrap().push(child);
-            child.parents.write().unwrap().push(self);
-        }
-    }
-
-    let docker = Program::new("docker");
-    let dep_a = Program::new("dep_a");
-    let dep_b = Program::new("dep_b");
-
-    docker.add_child(&dep_a);
-    docker.add_child(&dep_b);
-    dep_a.add_child(&dep_b);
-
-    assert_eq!(docker.children.read().unwrap().len(), 2);
-    assert_eq!(dep_a.children.read().unwrap().len(), 1);
-    assert_eq!(dep_b.children.read().unwrap().len(), 0);
-
-    assert_eq!(docker.parents.read().unwrap().len(), 0);
-    assert_eq!(dep_a.parents.read().unwrap().len(), 1);
-    assert_eq!(dep_b.parents.read().unwrap().len(), 2);
-
-    assert_eq!(docker.children.read().unwrap()[0].name, "dep_a");
-    assert_eq!(docker.children.read().unwrap()[1].name, "dep_b");
-    assert_eq!(dep_a.parents.read().unwrap()[0].name, "docker");
-    assert_eq!(dep_b.parents.read().unwrap()[0].name, "docker");
-    assert_eq!(dep_b.parents.read().unwrap()[1].name, "dep_a");
+#[derive(Debug)]
+enum DotfilesError {
+    UnknownOperatingSystem(String),
+    UnsupportedOperatingSystem,
 }
 
-#[test]
-fn validate_design_three() {
+#[derive(Debug)]
+pub enum OperatingSystem {
+    Ubuntu2204,
+    Ubuntu2004,
+    Ubuntu1804,
 
-    #[derive(Debug)]
-    struct Program<'a> {
-        name: String,
-        parents: RwLock<Vec<&'a Program<'a>>>,
-        children: RwLock<Vec<&'a Program<'a>>>,
-        enabled: RwLock<bool>,
-    }
+    Fedora38,
 
-    impl<'a> Program<'a> {
-        fn new(name: &str) -> Program<'a> {
-            Program {
-                name: name.to_string(),
-                parents: RwLock::new(Vec::new()),
-                children: RwLock::new(Vec::new()),
-                enabled: RwLock::new(false),
+    Rocky9,
+    Rocky8,
+
+    PopOS2104,
+}
+
+impl OperatingSystem {
+    fn from_sysinfo() -> Result<Self, DotfilesError> {
+        let system = sysinfo::System::new_all();
+
+        // print out the current system information
+        println!("System name:             {:?}", system.name());
+        println!("System kernel version:   {:?}", system.kernel_version());
+        println!("System OS version:       {:?}", system.os_version());
+        println!("System host name:        {:?}", system.host_name());
+        println!("System uptime:           {}", system.uptime());
+        println!("System number of users:  {}", system.users().len());
+        println!("System processes:        {}", system.processes().len());
+        println!("System total memory:     {} kB", system.total_memory());
+        println!("System free memory:      {} kB", system.free_memory());
+
+        if let Some(os) = system.long_os_version() {
+            match os.as_str() {
+                "Linux 22.04 Ubuntu" => Ok(OperatingSystem::Ubuntu2204),
+                "Linux 20.04 Ubuntu" => Ok(OperatingSystem::Ubuntu2004),
+                "Linux 18.04 Ubuntu" => Ok(OperatingSystem::Ubuntu1804),
+
+                "Linux 38 Fedora" => Ok(OperatingSystem::Fedora38),
+
+                "Linux 9 Rocky" => Ok(OperatingSystem::Rocky9),
+                "Linux 8 Rocky" => Ok(OperatingSystem::Rocky8),
+
+                "Linux 21.04 Pop!_OS" => Ok(OperatingSystem::PopOS2104),
+                _ => Err(DotfilesError::UnknownOperatingSystem(os)),
             }
-        }
-
-        fn add_child(&'a self, child: &'a Program<'a>) {
-            self.children.write().unwrap().push(child);
-            child.parents.write().unwrap().push(self);
-        }
-
-        fn disable(&self) {
-            *self.enabled.write().unwrap() = false;
-        }
-
-        fn enable(&self) {
-            *self.enabled.write().unwrap() = true;
-        }
-
-        fn is_available(&self) -> bool {
-            // check if we are enabled, and all children recursively are enabled
-            let enabled = self.enabled.read().unwrap();
-            if !*enabled {
-                return false;
-            }
-
-            let children = self.children.read().unwrap();
-            for child in children.iter() {
-                if !child.is_available() {
-                    return false;
-                }
-            }
-
-            true
+        } else {
+            Err(DotfilesError::UnknownOperatingSystem(
+                "Unable to determine operating system".to_string(),
+            ))
         }
     }
-
-    let docker = Program::new("docker");
-    let dep_a = Program::new("dep_a");
-    let dep_b = Program::new("dep_b");
-    let dep_c = Program::new("dep_c");
-
-    docker.add_child(&dep_a);
-    docker.add_child(&dep_b);
-    dep_a.add_child(&dep_b);
-    dep_b.add_child(&dep_c);
-
-
-    // disable dep_c, should make all unavailable
-    dep_c.disable();
-    assert!(!docker.is_available());
-    assert!(!dep_a.is_available());
-    assert!(!dep_b.is_available());
-    assert!(!dep_c.is_available());
-    dep_c.enable();
-
-    // disable dep_b, should make all EXCEPT dep_c unavailable
-    dep_b.disable();
-    assert!(!docker.is_available());
-    assert!(!dep_a.is_available());
-    assert!(!dep_b.is_available());
-    assert!(dep_c.is_available());
-    dep_b.enable();
-
-    // disable dep_a, should make all EXCEPT dep_c and b unavailable
-    dep_a.disable();
-    assert!(!docker.is_available());
-    assert!(!dep_a.is_available());
-    assert!(dep_b.is_available());
-    assert!(dep_c.is_available());
-    dep_a.enable();
-
-    // disable docker, should make only docker unavailable
-    docker.disable();
-    assert!(!docker.is_available());
-    assert!(dep_a.is_available());
-    assert!(dep_b.is_available());
-    assert!(dep_c.is_available());
-    docker.enable();
 }

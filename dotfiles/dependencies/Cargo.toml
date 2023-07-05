@@ -1,0 +1,14 @@
+[package]
+name = "dependencies"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+singleton-derive = { path = "../singleton-derive" }
+reqwest = { version = "0.11.18", default-features = false, features = ["blocking", "rustls-tls"] }
+lazy_static = "1.4.0"
+log = "0.4.19"
+sysinfo = { version = "0.29.2", features = ["serde"] }
+whoami = { version = "1.4.1", default-features = false }

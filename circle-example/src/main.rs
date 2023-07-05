@@ -89,6 +89,7 @@ fn run(terminal: &mut Terminal<CrosstermBackend<Stdout>>) -> Result<(), Box<dyn 
                         let t1 = (-b + discriminant.sqrt()) / (2.0 * a);
                         (line_start.0 + t1 * dx, line_start.1 + t1 * dy)
                     }
+
                     // line starts at the center of the first circle, and ends at the center of the second circle
                     let a = (circle_x, circle_y);
                     let b = (100.0, 50.0);

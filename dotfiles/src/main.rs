@@ -12,7 +12,6 @@
 //      - Check if Docker is configured correctly
 
 mod app;
-mod dependencies;
 mod event;
 mod handler;
 mod tui;
@@ -21,6 +20,13 @@ mod ui;
 use std::io;
 
 use app::{App, AppResult};
+use dependencies::{
+    bat::Bat, ca_certificates::CaCertificates, curl::Curl, git::Git, ohmyzsh::OhMyZsh,
+    package_cache_refresh::PackageCacheRefresh, rust::Rust, zsh::Zsh, zsh_aliases::ZshAliases,
+    zsh_autosuggestions::ZshAutoSuggestions, zsh_syntax_highlighting::ZshSyntaxHighlighting,
+    zshrc::Zshrc, DependencyInstallable, InstallationStatus, CURRENT_USER, HOME_DIR,
+    OPERATING_SYSTEM, powerlevel10k::PowerLevel10k,
+};
 use event::{Event, EventHandler};
 use handler::handle_key_events;
 use lazy_static::lazy_static;
@@ -30,17 +36,6 @@ use sysinfo::SystemExt;
 
 use log::{debug, error, info, trace, warn, LevelFilter};
 use tui::Tui;
-
-lazy_static! {
-    static ref OPERATING_SYSTEM: OperatingSystem =
-        OperatingSystem::from_sysinfo().expect("Unable to determine operating system");
-    static ref CURRENT_USER: String = whoami::username();
-    static ref HOME_DIR: String = home::home_dir()
-        .expect("Unable to find home directory")
-        .to_str()
-        .expect("Unable to convert home directory to String")
-        .to_string();
-}
 
 #[derive(Debug)]
 enum DotfilesError {
@@ -99,74 +94,142 @@ impl OperatingSystem {
     }
 }
 
-fn main() -> AppResult<()> {
-    // Create an application.
-    let mut app = App::new();
+// fn main() -> AppResult<()> {
+//     // Create an application.
+//     let mut app = App::new();
 
-    // Initialize the terminal user interface.
-    let backend = CrosstermBackend::new(io::stderr());
-    let terminal = Terminal::new(backend)?;
-    let events = EventHandler::new(500);
-    let mut tui = Tui::new(terminal, events);
-    tui.init()?;
+//     // Initialize the terminal user interface.
+//     let backend = CrosstermBackend::new(io::stderr());
+//     let terminal = Terminal::new(backend)?;
+//     let events = EventHandler::new(500);
+//     let mut tui = Tui::new(terminal, events);
+//     tui.init()?;
 
-    // Start the main loop.
-    while app.running {
-        // Render the user interface.
-        tui.draw(&mut app)?;
-        // Handle events.
-        match tui.events.next()? {
-            Event::Tick => app.tick(),
-            Event::Key(key_event) => handle_key_events(key_event, &mut app)?,
-            Event::Mouse(_) => {}
-            Event::Resize(_, _) => {}
-        }
-    }
-
-    // Exit the user interface.
-    tui.exit()?;
-    Ok(())
-}
-
-// fn main() {
-//     // TODO: setup clap to parse arguments,
-//     // TODO: setup reading from a version file that gets written
-//     // TODO: setup proper logging with a very aggressive log level
-
-//     //XXX: move configuration load into a separate function
-//     //XXX: setup cargo deny
-
-//     // pretty_env_logger::init();
-//     pretty_env_logger::formatted_builder()
-//         .filter_level(LevelFilter::Trace)
-//         .init();
-
-//     error!("This is an error!");
-//     warn!("This is a warn!");
-//     info!("This is an info!");
-//     debug!("This is a debug!");
-//     trace!("This is a trace!");
-
-//     let is_sudo = sudo::escalate_if_needed().unwrap();
-//     if is_sudo != RunningAs::Root {
-//         println!("This application requires root privileges to install dependencies");
-//         std::process::exit(1);
+//     // Start the main loop.
+//     while app.running {
+//         // Render the user interface.
+//         tui.draw(&mut app)?;
+//         // Handle events.
+//         match tui.events.next()? {
+//             Event::Tick => app.tick(),
+//             Event::Key(key_event) => handle_key_events(key_event, &mut app)?,
+//             Event::Mouse(_) => {}
+//             Event::Resize(_, _) => {}
+//         }
 //     }
 
-//     let user = whoami::username();
-//     println!("Running as user: {}", user);
-
-//     // let mut d = Docker::new();
-//     // let is_installed = d.is_installed().await.unwrap();
-
-//     // println!("is_installed: {:?}", is_installed);
-//     // println!("things: {:?}", d);
-
-//     // if ! matches!(is_installed, InstallationStatus::FullyInstalled) {
-//     //     println!("Installing docker");
-//     //     d.install(None).await.unwrap();
-//     // }
-
-//     // println!("is_installed: {:?}", d.is_installed().await.unwrap());
-//     // println!("things: {:?}", d);
+//     // Exit the user interface.
+//     tui.exit()?;
+//     Ok(())
 // }
+
+fn main() {
+    // TODO: setup clap to parse arguments,
+    // TODO: setup reading from a version file that gets written
+    // TODO: setup proper logging with a very aggressive log level
+
+    //XXX: move configuration load into a separate function
+    //XXX: setup cargo deny
+
+    // pretty_env_logger::init();
+    pretty_env_logger::formatted_builder()
+        .filter_level(LevelFilter::Info)
+        .init();
+
+    error!("This is an error!");
+    warn!("This is a warn!");
+    info!("This is an info!");
+    debug!("This is a debug!");
+    trace!("This is a trace!");
+
+    // trigger all lazy statics
+    let _ = *OPERATING_SYSTEM;
+    let _ = *CURRENT_USER;
+    let _ = *HOME_DIR;
+
+    let is_sudo = sudo::escalate_if_needed().unwrap();
+    if is_sudo != RunningAs::Root {
+        println!("This application requires root privileges to install dependencies");
+        std::process::exit(1);
+    }
+
+    let to_install: Vec<&dyn DependencyInstallable> = vec![
+        // AptTransportHttps::singleton(),
+        // AuthorizedKeysUpdater::singleton(),
+        // AuthorizedKeys::singleton(),
+        Bat::singleton(),
+        // CaCertificates::singleton(),
+        Curl::singleton(),
+        // Docker::singleton(),
+        // Ed25519Key::singleton(),
+        // FirefoxConfig::singleton(),
+        // Firefox::singleton(),
+        Git::singleton(),
+        // GitConfig::singleton(),
+        // Gnupg::singleton(),
+        // NodeJs::singleton(),
+        // Nvm::singleton(),
+        OhMyZsh::singleton(),
+        PackageCacheRefresh::singleton(),
+        // Pip3::singleton(),
+        PowerLevel10k::singleton(),
+        // Python3Dev::singleton(),
+        // Python3::singleton(),
+        Rust::singleton(),
+        // Scripts::singleton(),
+        // SetupTools::singleton(),
+        // SshConfig::singleton(),
+        // TheFuck::singleton(),
+        // Tmux::singleton(),
+        // Tokei::singleton(),
+        // VsCode::singleton(),
+        // Yarn::singleton(),
+        // Zoxide::singleton(),
+        ZshAliases::singleton(),
+        ZshAutoSuggestions::singleton(),
+        ZshSyntaxHighlighting::singleton(),
+        Zsh::singleton(),
+        Zshrc::singleton(),
+    ];
+
+    fn recursively_install_dependencies(
+        dependency: &dyn DependencyInstallable,
+        top_level: Option<String>,
+    ) {
+        for dep in dependency.requires() {
+            let needs_install = dep.is_installed().unwrap();
+            if matches!(needs_install, InstallationStatus::FullyInstalled) {
+                println!("Dependency ({}): {} SKIPPED", dependency.name(), dep.name());
+            } else {
+                recursively_install_dependencies(dep, Some(dependency.name().to_string()));
+                dep.install().unwrap();
+            }
+        }
+
+        let needs_install = dependency.is_installed().unwrap();
+        if matches!(needs_install, InstallationStatus::FullyInstalled) {
+            if let Some(top_level) = top_level {
+                println!("Dependency ({}): {} SKIPPED", top_level, dependency.name());
+            } else {
+                println!("Application: {} SKIPPED", dependency.name());
+            }
+        } else {
+            if let Some(top_level) = top_level {
+                println!(
+                    "Dependency ({}): {} INSTALLING",
+                    top_level,
+                    dependency.name()
+                );
+            } else {
+                println!("Application: {} INSTALLING", dependency.name());
+            }
+        }
+
+        dependency.install().unwrap();
+    }
+
+    println!("Operating system: {:?}", *OPERATING_SYSTEM);
+    for dependency in to_install.into_iter() {
+        recursively_install_dependencies(dependency, None);
+    }
+}
