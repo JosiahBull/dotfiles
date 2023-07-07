@@ -5,8 +5,7 @@ use singleton_derive::Singleton;
 use super::{DependencyError, DependencyInfo, DependencyInstallable, InstallationStatus};
 use crate::{
     command::{AsUser, CommandError, DCommand},
-    dependencies::rust::Rust,
-    gcc::Gcc,
+    dependencies::{gcc::Gcc, rust::Rust},
     HOME_DIR,
 };
 use lazy_static::lazy_static;

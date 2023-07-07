@@ -51,20 +51,22 @@ pub fn singleton(input: TokenStream) -> TokenStream {
 
     // Generate the static identifier for the singleton instance, converting CamelCase to snake_case
     let static_ident = syn::Ident::new(
-        &format!("__{}",
-        struct_name
-            .to_string()
-            .chars()
-            .enumerate()
-            .map(|(i, c)| {
-                if c.is_uppercase() && i > 0 {
-                    format!("_{}", c.to_lowercase())
-                } else {
-                    c.to_string()
-                }
-            })
-            .collect::<String>()
-            .to_uppercase()),
+        &format!(
+            "__{}",
+            struct_name
+                .to_string()
+                .chars()
+                .enumerate()
+                .map(|(i, c)| {
+                    if c.is_uppercase() && i > 0 {
+                        format!("_{}", c.to_lowercase())
+                    } else {
+                        c.to_string()
+                    }
+                })
+                .collect::<String>()
+                .to_uppercase()
+        ),
         struct_name.span(),
     );
 

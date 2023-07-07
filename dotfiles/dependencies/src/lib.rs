@@ -1,10 +1,27 @@
 pub mod command;
-pub mod dependencies;
+mod dependencies;
 pub mod system_data;
-pub mod tree;
+
+use std::cell::OnceCell;
+use std::sync::{Arc, OnceLock};
 
 // Make all dependencies top-level for convenience
-pub use dependencies::*;
+// High Level
+pub use dependencies::{AsUser, CommandResult, DependencyInstallable, InstallationStatus, DependencyGraph, DependencyGraphNode};
+
+// Individual Applications
+pub use dependencies::bat::Bat;
+pub use dependencies::curl::Curl;
+pub use dependencies::git::Git;
+pub use dependencies::ohmyzsh::OhMyZsh;
+pub use dependencies::package_cache_refresh::PackageCacheRefresh;
+pub use dependencies::powerlevel10k::PowerLevel10k;
+pub use dependencies::rust::Rust;
+pub use dependencies::zsh::Zsh;
+pub use dependencies::zsh_aliases::ZshAliases;
+pub use dependencies::zsh_autosuggestions::ZshAutoSuggestions;
+pub use dependencies::zsh_syntax_highlighting::ZshSyntaxHighlighting;
+pub use dependencies::zshrc::Zshrc;
 
 // Other Imports
 use lazy_static::lazy_static;
@@ -88,4 +105,21 @@ impl OperatingSystem {
             ))
         }
     }
+}
+
+pub fn all_installable() -> Vec<&'static dyn DependencyInstallable> {
+    vec![
+        Bat::singleton(),
+        Curl::singleton(),
+        Git::singleton(),
+        OhMyZsh::singleton(),
+        PackageCacheRefresh::singleton(),
+        PowerLevel10k::singleton(),
+        Rust::singleton(),
+        ZshAliases::singleton(),
+        ZshAutoSuggestions::singleton(),
+        ZshSyntaxHighlighting::singleton(),
+        Zsh::singleton(),
+        Zshrc::singleton(),
+    ]
 }

@@ -58,7 +58,9 @@ impl DependencyInstallable for Zsh {
                     DCommand::new("apt-get", &["install", "-y", "zsh"]).run()?;
                 }
                 OperatingSystem::Fedora38 => {
-                    DCommand::new("dnf", &["install", "-y", "zsh"]).user(AsUser::DoNothing).run()?;
+                    DCommand::new("dnf", &["install", "-y", "zsh"])
+                        .user(AsUser::DoNothing)
+                        .run()?;
                 }
                 _ => return Err(DependencyError::UnsupportedOperatingSystem),
             }

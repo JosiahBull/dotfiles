@@ -21,11 +21,8 @@ use std::io;
 
 use app::{App, AppResult};
 use dependencies::{
-    bat::Bat, ca_certificates::CaCertificates, curl::Curl, git::Git, ohmyzsh::OhMyZsh,
-    package_cache_refresh::PackageCacheRefresh, rust::Rust, zsh::Zsh, zsh_aliases::ZshAliases,
-    zsh_autosuggestions::ZshAutoSuggestions, zsh_syntax_highlighting::ZshSyntaxHighlighting,
-    zshrc::Zshrc, DependencyInstallable, InstallationStatus, CURRENT_USER, HOME_DIR,
-    OPERATING_SYSTEM, powerlevel10k::PowerLevel10k,
+    all_installable, DependencyInstallable, InstallationStatus, CURRENT_USER, HOME_DIR,
+    OPERATING_SYSTEM, DependencyGraph,
 };
 use event::{Event, EventHandler};
 use handler::handle_key_events;
@@ -153,44 +150,7 @@ fn main() {
         std::process::exit(1);
     }
 
-    let to_install: Vec<&dyn DependencyInstallable> = vec![
-        // AptTransportHttps::singleton(),
-        // AuthorizedKeysUpdater::singleton(),
-        // AuthorizedKeys::singleton(),
-        Bat::singleton(),
-        // CaCertificates::singleton(),
-        Curl::singleton(),
-        // Docker::singleton(),
-        // Ed25519Key::singleton(),
-        // FirefoxConfig::singleton(),
-        // Firefox::singleton(),
-        Git::singleton(),
-        // GitConfig::singleton(),
-        // Gnupg::singleton(),
-        // NodeJs::singleton(),
-        // Nvm::singleton(),
-        OhMyZsh::singleton(),
-        PackageCacheRefresh::singleton(),
-        // Pip3::singleton(),
-        PowerLevel10k::singleton(),
-        // Python3Dev::singleton(),
-        // Python3::singleton(),
-        Rust::singleton(),
-        // Scripts::singleton(),
-        // SetupTools::singleton(),
-        // SshConfig::singleton(),
-        // TheFuck::singleton(),
-        // Tmux::singleton(),
-        // Tokei::singleton(),
-        // VsCode::singleton(),
-        // Yarn::singleton(),
-        // Zoxide::singleton(),
-        ZshAliases::singleton(),
-        ZshAutoSuggestions::singleton(),
-        ZshSyntaxHighlighting::singleton(),
-        Zsh::singleton(),
-        Zshrc::singleton(),
-    ];
+    let to_install: Vec<&dyn DependencyInstallable> = all_installable();
 
     fn recursively_install_dependencies(
         dependency: &dyn DependencyInstallable,

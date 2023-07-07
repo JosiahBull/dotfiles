@@ -1,9 +1,14 @@
 use std::{
-    fmt::{Debug, Display},
+    collections::HashMap,
+    fmt::{Debug, Display, self},
     fs::metadata,
     io::{BufRead, Read},
     string::FromUtf8Error,
+    sync::{Arc, Weak, RwLock, TryLockError},
+    ops::Deref, borrow::BorrowMut, cell::RefCell,
 };
+
+use lazy_static::__Deref;
 
 use crate::command::{CommandError, Output};
 
@@ -219,3 +224,151 @@ pub trait DependencyInstallable: DependencyInfo {
 //     /// Check if this dependency is enabled
 //     fn is_enabled(&self) -> bool;
 // }
+
+pub struct DependencyGraphNode<'a, T: DependencyInstallable> {
+    enabled: bool,
+    dependencies: RwLock<Vec<&'a DependencyGraphNode<'a, T>>>,
+    dependants: RwLock<Vec<&'a DependencyGraphNode<'a, T>>>,
+    wrapped: T,
+}
+
+impl<T: DependencyInstallable + Debug> Debug for DependencyGraphNode<'_, T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let dependency_names = match self.dependencies.try_read() {
+            Ok(guard) => {
+                let mut names = vec![];
+                for dependency in guard.iter() {
+                    names.push(dependency.wrapped.name());
+                }
+                names
+            },
+            Err(TryLockError::Poisoned(err)) => {
+                let mut names = vec![];
+                for dependency in err.into_inner().iter() {
+                    names.push(dependency.wrapped.name());
+                }
+                names
+            },
+            Err(TryLockError::WouldBlock) => {
+                vec!["<locked>"]
+            }
+        };
+        let dependant_names = match self.dependants.try_read() {
+            Ok(guard) => {
+                let mut names = vec![];
+                for dependency in guard.iter() {
+                    names.push(dependency.wrapped.name());
+                }
+                names
+            },
+            Err(TryLockError::Poisoned(err)) => {
+                let mut names = vec![];
+                for dependency in err.into_inner().iter() {
+                    names.push(dependency.wrapped.name());
+                }
+                names
+            },
+            Err(TryLockError::WouldBlock) => {
+                vec!["<locked>"]
+            }
+        };
+
+        f.debug_struct("DependencyGraphNode")
+            .field("enabled", &self.enabled)
+            .field("dependencies", &dependency_names.join(", "))
+            .field("dependants", &dependant_names.join(", "))
+            .field("wrapped", &self.wrapped)
+            .finish()
+    }
+}
+
+impl<T: DependencyInstallable + Display> Display for DependencyGraphNode<'_, T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f,
+            "{}: {}",
+            self.wrapped.name(),
+            if self.enabled { "enabled" } else { "disabled" }
+        )
+    }
+}
+
+impl<T: DependencyInstallable + Clone> Clone for DependencyGraphNode<'_, T> {
+    fn clone(&self) -> Self {
+        Self {
+            enabled: self.enabled,
+            dependencies: RwLock::new(self.dependencies.read().unwrap().clone()),
+            dependants: RwLock::new(self.dependants.read().unwrap().clone()),
+            wrapped: self.wrapped.clone(),
+        }
+    }
+}
+
+impl<T: DependencyInstallable> Deref for DependencyGraphNode<'_, T> {
+    type Target = T;
+    fn deref(&self) -> &Self::Target {
+        &self.wrapped
+    }
+}
+
+impl<'a, T: DependencyInstallable> DependencyGraphNode<'a, T> {
+    fn new(wrapped: T) -> Self {
+        Self {
+            enabled: false,
+            dependencies: RwLock::new(vec![]),
+            dependants: RwLock::new(vec![]),
+            wrapped,
+        }
+    }
+
+    fn add_dependency(&self, dependency: &'a DependencyGraphNode<'a, T>) {
+        self.dependencies.write().unwrap().push(dependency);
+    }
+
+    fn add_dependant(&self, dependant: &'a DependencyGraphNode<'a, T>) {
+        self.dependants.write().unwrap().push(dependant);
+    }
+}
+
+pub struct DependencyGraph<'a, T: DependencyInstallable> {
+    nodes: HashMap<&'static str, &'a DependencyGraphNode<'a, T>>,
+    top_level_nodes: Vec<&'a DependencyGraphNode<'a, T>>,
+}
+
+impl<'a, T: DependencyInstallable> DependencyGraph<'a, T> {
+    pub fn new() -> Self {
+        Self {
+            nodes: HashMap::new(),
+            top_level_nodes: vec![],
+        }
+    }
+
+    pub fn add_node(&mut self, node: &'a DependencyGraphNode<'a, T>) {
+        self.nodes.insert(node.wrapped.name(), node);
+        self.top_level_nodes.push(&node);
+
+        for dependency in node.wrapped.requires() {
+            let dependency = *self.nodes.get_mut(dependency.name()).unwrap();
+            node.add_dependency(dependency);
+            dependency.add_dependant(node);
+        }
+    }
+
+    pub fn get(&self, name: &'static str) -> Option<&'a DependencyGraphNode<'a, T>> {
+        self.nodes.get(name).copied()
+    }
+
+    pub fn is_top_level(&self, name: &'static str) -> bool {
+        self.top_level_nodes.iter().any(|node| node.wrapped.name() == name)
+    }
+
+    pub fn top_nodes(&self) -> Vec<&'a DependencyGraphNode<'a, T>> {
+        self.top_level_nodes.clone()
+    }
+}
+
+impl<'a, T: DependencyInstallable> Deref for DependencyGraph<'a, T> {
+    type Target = HashMap<&'static str, &'a DependencyGraphNode<'a, T>>;
+    fn deref(&self) -> &Self::Target {
+        &self.nodes
+    }
+}
