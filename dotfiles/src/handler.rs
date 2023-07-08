@@ -15,6 +15,21 @@ pub fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<()> {
             }
         }
 
+        // use the arrow keys to move the view
+        KeyCode::Left => {
+            app.view_loc.0 -= 10.0;
+        }
+        KeyCode::Right => {
+            app.view_loc.0 += 10.0;
+        }
+        KeyCode::Up => {
+            app.view_loc.1 += 10.0;
+        }
+        KeyCode::Down => {
+            app.view_loc.1 -= 10.0;
+        }
+
+
         // Other handlers you could add here.
         _ => {}
     }

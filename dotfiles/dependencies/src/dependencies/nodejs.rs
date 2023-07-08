@@ -2,10 +2,11 @@ use std::sync::RwLock;
 
 use singleton_derive::Singleton;
 
-use super::{
-    run_command, DependencyError, DependencyInfo, DependencyInstallable, InstallationStatus,
+use super::{DependencyError, DependencyInfo, DependencyInstallable, InstallationStatus};
+use crate::{
+    command::{CommandError, DCommand},
+    dependencies::{nvm::Nvm, package_cache_refresh::PackageCacheRefresh},
 };
-use crate::dependencies::{nvm::Nvm, package_cache_refresh::PackageCacheRefresh};
 
 #[derive(Debug, Default, Singleton)]
 pub struct NodeJs {
@@ -26,9 +27,10 @@ impl DependencyInfo for NodeJs {
 impl DependencyInstallable for NodeJs {
     fn is_installed(&self) -> Result<InstallationStatus, DependencyError> {
         // check if nodejs is installed by using `which nodejs`
-        let res = run_command("which", &vec!["node"])?;
-        *self.nodejs_available.write().unwrap() = res.success;
-        match res.success {
+        let res = DCommand::new("which", &["node"]).run();
+        let res = matches!(res, Err(CommandError::CommandFailed(_)));
+        *self.nodejs_available.write().unwrap() = res;
+        match res {
             true => Ok(InstallationStatus::FullyInstalled),
             false => Ok(InstallationStatus::NotInstalled),
         }
@@ -40,10 +42,7 @@ impl DependencyInstallable for NodeJs {
             return Ok(());
         }
 
-        run_command("nvm", &vec!["install", "node"])?
-            .error
-            .map_or(Ok(()), |e| Err(e))?;
-
+        DCommand::new("nvm", &["install", "node"]).run()?;
         *self.nodejs_available.write().unwrap() = true;
 
         Ok(())

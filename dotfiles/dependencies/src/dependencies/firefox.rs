@@ -2,11 +2,11 @@ use std::sync::RwLock;
 
 use singleton_derive::Singleton;
 
-use super::{
-    run_command, DependencyError, DependencyInfo, DependencyInstallable, InstallationStatus,
-};
+use super::{DependencyError, DependencyInfo, DependencyInstallable, InstallationStatus};
 use crate::{
-    dependencies::package_cache_refresh::PackageCacheRefresh, OperatingSystem, OPERATING_SYSTEM,
+    command::{CommandError, DCommand},
+    dependencies::package_cache_refresh::PackageCacheRefresh,
+    OperatingSystem, OPERATING_SYSTEM,
 };
 
 #[derive(Debug, Default, Singleton)]
@@ -28,9 +28,10 @@ impl DependencyInfo for Firefox {
 impl DependencyInstallable for Firefox {
     fn is_installed(&self) -> Result<InstallationStatus, DependencyError> {
         // check if firefox is installed by using `which firefox`
-        let res = run_command("which", &vec!["firefox"])?;
-        *self.firefox_available.write().unwrap() = res.success;
-        match res.success {
+        let res = DCommand::new("which", &["firefox"]).run();
+        let res = matches!(res, Err(CommandError::CommandFailed(_)));
+        *self.firefox_available.write().unwrap() = res;
+        match res {
             true => Ok(InstallationStatus::FullyInstalled),
             false => Ok(InstallationStatus::NotInstalled),
         }
@@ -46,15 +47,11 @@ impl DependencyInstallable for Firefox {
             | OperatingSystem::Ubuntu2004
             | OperatingSystem::Ubuntu2204
             | OperatingSystem::PopOS2104 => {
-                run_command("apt-get", &vec!["install", "-y", "firefox"])?
-                    .error
-                    .map_or(Ok(()), |e| Err(e))?;
+                DCommand::new("apt-get", &["install", "-y", "firefox"]).run()?;
                 *self.firefox_available.write().unwrap() = true;
             }
             OperatingSystem::Fedora38 | OperatingSystem::Rocky8 | OperatingSystem::Rocky9 => {
-                run_command("dnf", &vec!["install", "-y", "firefox"])?
-                    .error
-                    .map_or(Ok(()), |e| Err(e))?;
+                DCommand::new("dnf", &["install", "-y", "firefox"]).run()?;
                 *self.firefox_available.write().unwrap() = true;
             }
         }

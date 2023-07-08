@@ -2,10 +2,11 @@ use std::{fs::metadata, sync::RwLock};
 
 use singleton_derive::Singleton;
 
-use super::{
-    run_command, DependencyError, DependencyInfo, DependencyInstallable, InstallationStatus,
+use super::{DependencyError, DependencyInfo, DependencyInstallable, InstallationStatus};
+use crate::{
+    command::{AsUser, CommandError, DCommand},
+    OperatingSystem, OPERATING_SYSTEM,
 };
-use crate::{OperatingSystem, OPERATING_SYSTEM};
 use reqwest;
 
 const CODE_BINARY_PATH: &str = "/usr/bin/code";
@@ -34,7 +35,9 @@ impl DependencyInstallable for VsCode {
     fn is_installed(&self) -> Result<InstallationStatus, DependencyError> {
         // check if vscode is present in file, or as cmd
         let is_present = metadata(CODE_BINARY_PATH).is_ok();
-        let cmd_available = run_command("which", &vec!["code"])?.success;
+        let cmd_available = DCommand::new("which", &["code"]).run();
+        // XXX: The following match statement has a hidden failure mode (what if cmd fails for a different reason?)
+        let cmd_available = matches!(cmd_available, Err(CommandError::CommandFailed(_)));
         *self.vscode_in_path.write().unwrap() = is_present || cmd_available;
         match is_present || cmd_available {
             true => Ok(InstallationStatus::FullyInstalled),
@@ -76,7 +79,9 @@ impl DependencyInstallable for VsCode {
             .map_err(|e| DependencyError::DependencyFailed(e.to_string()))?;
 
         // install the file
-        run_command("sudo", &vec!["dpkg", "-i", "/tmp/vscode.osinstall"])?;
+        DCommand::new("dpkg", &["-i", "/tmp/vscode.osinstall"])
+            .user(AsUser::Root)
+            .run()?;
 
         *self.vscode_in_path.write().unwrap() = true;
         Ok(())

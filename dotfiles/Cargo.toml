@@ -18,7 +18,7 @@ sudo = "0.6.0"
 sysinfo = { version = "0.29.2", features = ["serde"] }
 dependencies = { path = "./dependencies" }
 ouroboros = "0.17.0"
-# tree = { path = "./tree" }
+tree = { path = "./tree" }
 
 [profile.release]
 opt-level = 'z'
@@ -29,5 +29,5 @@ codegen-units = 1
 members=[
     "./singleton-derive",
     "./dependencies",
-    # "./tree"
+    "./tree"
 ]

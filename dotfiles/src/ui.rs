@@ -83,6 +83,8 @@ const COL_SEPARATION: f64 = 100.0;
 
 /// Renders the user interface widgets.
 pub fn render<B: Backend>(app: &mut App, frame: &mut Frame<'_, B>) {
+    let (view_x, view_y) = app.view_loc;
+
     let canvas = Canvas::default()
         .block(
             Block::default()
@@ -95,57 +97,57 @@ pub fn render<B: Backend>(app: &mut App, frame: &mut Frame<'_, B>) {
             // The goal is to calculate all the positions of the nodes in the graph, we do this by first constructing a dependency graph
             // then we can use that graph to draw onto a canvas.
 
-            //     let mut dependency_map = HashMap::new();
+            let mut dependency_map = HashMap::new();
 
-            //     // For each dependency in each column, draw a circle
-            //     for (col_index, column) in app.dependency_graph.iter().enumerate() {
-            //         for (row_index, dependency) in column.iter().enumerate() {
-            //             let x = (col_index as f64 * COL_SEPARATION) + CIRCLE_DISTANCE;
-            //             let y = (row_index as f64 * CIRCLE_DISTANCE) + CIRCLE_DISTANCE;
+            // For each dependency in each column, draw a circle
+            for (col_index, column) in app.dependency_view.iter().enumerate() {
+                for (row_index, dependency) in column.iter().enumerate() {
+                    let x = (col_index as f64 * COL_SEPARATION) + CIRCLE_DISTANCE;
+                    let y = (row_index as f64 * CIRCLE_DISTANCE) + CIRCLE_DISTANCE;
 
-            //             ctx.draw(&Circle {
-            //                 x,
-            //                 y,
-            //                 radius: CIRCLE_RADIUS,
-            //                 color: Color::White,
-            //             });
+                    ctx.draw(&Circle {
+                        x: x + view_x,
+                        y: y + view_y,
+                        radius: CIRCLE_RADIUS,
+                        color: Color::White,
+                    });
 
-            //             ctx.print(x - 5.0, y - 5.0, dependency.name().to_owned());
+                    ctx.print(x - 5.0 + view_x, y - 5.0 + view_y, dependency.name().to_owned());
 
-            //             dependency_map.insert(dependency.name().to_owned(), (x, y));
-            //         }
-            //     }
+                    dependency_map.insert(dependency.name().to_owned(), (x, y));
+                }
+            }
 
-            //     // If there is a dependency between two nodes, draw a line between them
-            //     // FIXME: If two dependencies are in a line, the line will be drawn over the intermediate circle
-            //     for (_, column) in app.dependency_graph.iter().enumerate() {
-            //         for (_, dependency) in column.iter().enumerate() {
-            //             // get children of this dependency
-            //             let children = dependency.dependencies();
+            // If there is a dependency between two nodes, draw a line between them
+            // FIXME: If two dependencies are in a line, the line will be drawn over the intermediate circle
+            for (_, column) in app.dependency_view.iter().enumerate() {
+                for (_, dependency) in column.iter().enumerate() {
+                    // get children of this dependency
+                    let children = dependency.children();
 
-            //             // for each child, draw a line between this dependency and the child
-            //             for child in children {
-            //                 let start_point = *dependency_map.get(dependency.name()).unwrap();
-            //                 let end_point = *dependency_map.get(child.name()).unwrap();
+                    // for each child, draw a line between this dependency and the child
+                    for child in children {
+                        let start_point = *dependency_map.get(dependency.name()).unwrap();
+                        let end_point = *dependency_map.get(child.name()).unwrap();
 
-            //                 let start_point =
-            //                     find_intersection(start_point, CIRCLE_RADIUS, start_point, end_point)
-            //                         .unwrap();
+                        let start_point =
+                            find_intersection(start_point, CIRCLE_RADIUS, start_point, end_point)
+                                .unwrap();
 
-            //                 let end_point =
-            //                     find_intersection(end_point, CIRCLE_RADIUS, end_point, start_point)
-            //                         .unwrap();
+                        let end_point =
+                            find_intersection(end_point, CIRCLE_RADIUS, end_point, start_point)
+                                .unwrap();
 
-            //                 ctx.draw(&Line {
-            //                     x1: start_point.0,
-            //                     y1: start_point.1,
-            //                     x2: end_point.0,
-            //                     y2: end_point.1,
-            //                     color: Color::White,
-            //                 })
-            //             }
-            //         }
-            //     }
+                        ctx.draw(&Line {
+                            x1: start_point.0 + view_x,
+                            y1: start_point.1 + view_y,
+                            x2: end_point.0 + view_x,
+                            y2: end_point.1 + view_y,
+                            color: Color::White,
+                        })
+                    }
+                }
+            }
         });
 
     frame.render_widget(canvas, frame.size());

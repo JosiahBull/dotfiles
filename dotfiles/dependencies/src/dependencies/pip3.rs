@@ -2,10 +2,9 @@ use std::sync::RwLock;
 
 use singleton_derive::Singleton;
 
-use super::{
-    run_command, DependencyError, DependencyInfo, DependencyInstallable, InstallationStatus,
-};
+use super::{DependencyError, DependencyInfo, DependencyInstallable, InstallationStatus};
 use crate::{
+    command::{CommandError, DCommand},
     dependencies::{package_cache_refresh::PackageCacheRefresh, python3::Python3},
     OperatingSystem, OPERATING_SYSTEM,
 };
@@ -29,9 +28,10 @@ impl DependencyInfo for Pip3 {
 impl DependencyInstallable for Pip3 {
     fn is_installed(&self) -> Result<InstallationStatus, DependencyError> {
         // check if pip3 is installed by using `which pip3`
-        let res = run_command("which", &vec!["pip3"])?;
-        *self.pip3_available.write().unwrap() = res.success;
-        match res.success {
+        let res = DCommand::new("which", &["pip3"]).run();
+        let res = matches!(res, Err(CommandError::CommandFailed(_)));
+        *self.pip3_available.write().unwrap() = res;
+        match res {
             true => Ok(InstallationStatus::FullyInstalled),
             false => Ok(InstallationStatus::NotInstalled),
         }
@@ -46,9 +46,7 @@ impl DependencyInstallable for Pip3 {
             OperatingSystem::Ubuntu1804
             | OperatingSystem::Ubuntu2004
             | OperatingSystem::Ubuntu2204 => {
-                run_command("apt-get", &vec!["install", "-y", "python3-pip"])?
-                    .error
-                    .map_or(Ok(()), |e| Err(e))?;
+                DCommand::new("apt-get", &["install", "-y", "python3-pip"]).run()?;
                 *self.pip3_available.write().unwrap() = true;
             }
             //TODO: support other operating systems, with fallback to compile from source.

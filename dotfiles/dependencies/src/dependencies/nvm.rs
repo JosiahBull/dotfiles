@@ -2,10 +2,9 @@ use std::sync::RwLock;
 
 use singleton_derive::Singleton;
 
-use super::{
-    run_command, DependencyError, DependencyInfo, DependencyInstallable, InstallationStatus,
-};
+use super::{DependencyError, DependencyInfo, DependencyInstallable, InstallationStatus};
 use crate::{
+    command::{CommandError, DCommand},
     dependencies::{curl::Curl, package_cache_refresh::PackageCacheRefresh, zshrc::Zshrc},
     HOME_DIR,
 };
@@ -36,16 +35,23 @@ impl DependencyInfo for Nvm {
         vec![PackageCacheRefresh::singleton(), Curl::singleton()]
     }
 
-    fn optional(&self) -> Vec<&'static dyn DependencyInstallable> {
-        vec![Zshrc::singleton()]
+    fn optional(
+        &self,
+    ) -> Vec<(
+        &'static str,
+        &'static str,
+        &'static dyn DependencyInstallable,
+    )> {
+        vec![("zshrc", "Will automatically load zshrc", Zshrc::singleton())]
     }
 }
 
 impl DependencyInstallable for Nvm {
     fn is_installed(&self) -> Result<InstallationStatus, DependencyError> {
         // check if nvm is installed by using `which nvm`
-        let res = run_command("which", &vec!["nvm"])?;
-        *self.nvm_available.write().unwrap() = res.success;
+        let res = DCommand::new("which", &["nvm"]).run();
+        let res = matches!(res, Err(CommandError::CommandFailed(_)));
+        *self.nvm_available.write().unwrap() = res;
 
         // check if nvm is in EITHER of .zshrc or .bashrc
         let content = match Zshrc::singleton().is_installed()? {
@@ -74,9 +80,7 @@ impl DependencyInstallable for Nvm {
         // Install NVM if installation is missing
         if *self.nvm_available.read().unwrap() == false {
             // curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.3/install.sh | bash
-            run_command("curl", &["-o-", SCRIPT_URL])?
-                .error
-                .map_or(Ok(()), |e| Err(e))?;
+            DCommand::new("curl", &["-o-", SCRIPT_URL]).run()?;
             *self.nvm_available.write().unwrap() = true;
         }
 

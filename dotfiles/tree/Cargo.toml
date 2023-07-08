@@ -1,0 +1,24 @@
+[package]
+name = "tree"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+quote = "1.0.28"
+syn = { version = "2.0.18", features = ["full"] } # XXX: fix this
+proc-macro2 = "1.0.29"
+dependencies = { path = "../dependencies" }
+
+[lib]
+proc-macro = true
+
+[dev-dependencies]
+tree = { path = "." }
+ntest = "0.9.0"
+
+# integration tests
+# [[test]]
+# name = "tree"
+# path = "tests/test.rs"

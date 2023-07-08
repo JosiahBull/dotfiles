@@ -2,10 +2,9 @@ use std::sync::RwLock;
 
 use singleton_derive::Singleton;
 
-use super::{
-    run_command, DependencyError, DependencyInfo, DependencyInstallable, InstallationStatus,
-};
+use super::{DependencyError, DependencyInfo, DependencyInstallable, InstallationStatus};
 use crate::{
+    command::DCommand,
     dependencies::{package_cache_refresh::PackageCacheRefresh, python3::Python3},
     OperatingSystem, OPERATING_SYSTEM,
 };
@@ -31,8 +30,7 @@ impl DependencyInstallable for Python3Dev {
         let res = match *OPERATING_SYSTEM {
             OperatingSystem::Ubuntu1804
             | OperatingSystem::Ubuntu2004
-            | OperatingSystem::Ubuntu2204 => run_command("dpkg", &vec!["-s", "python3-dev"])?,
-            // FIXME
+            | OperatingSystem::Ubuntu2204 => DCommand::new("dpkg", &["-s", "python3-dev"]).run()?,
             _ => return Err(DependencyError::UnsupportedOperatingSystem),
         };
 
@@ -52,9 +50,7 @@ impl DependencyInstallable for Python3Dev {
             OperatingSystem::Ubuntu1804
             | OperatingSystem::Ubuntu2004
             | OperatingSystem::Ubuntu2204 => {
-                run_command("apt-get", &vec!["install", "-y", "python3-dev"])?
-                    .error
-                    .map_or(Ok(()), |e| Err(e))?;
+                DCommand::new("apt-get", &["install", "-y", "python3-dev"]).run()?;
             }
             // TODO
             _ => return Err(DependencyError::UnsupportedOperatingSystem),

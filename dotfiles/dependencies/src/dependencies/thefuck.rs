@@ -2,11 +2,10 @@ use std::{fs::metadata, sync::RwLock};
 
 use singleton_derive::Singleton;
 
-use super::{
-    run_command, DependencyError, DependencyInfo, DependencyInstallable, InstallationStatus,
-};
-use crate::dependencies::{
-    pip3::Pip3, python3::Python3, python3_dev::Python3Dev, setuptools::SetupTools,
+use super::{DependencyError, DependencyInfo, DependencyInstallable, InstallationStatus};
+use crate::{
+    command::{CommandError, DCommand},
+    dependencies::{pip3::Pip3, python3::Python3, python3_dev::Python3Dev, setuptools::SetupTools},
 };
 
 const THE_FUCK_PATH: &str = "/usr/local/bin/thefuck";
@@ -36,7 +35,8 @@ impl DependencyInstallable for TheFuck {
     fn is_installed(&self) -> Result<InstallationStatus, DependencyError> {
         // check if THE_FUCK_PATH exists, of if "which thefuck" works
         let if_path_exists = metadata(THE_FUCK_PATH).is_ok();
-        let cmd_available = run_command("which", &vec!["thefuck"])?.success;
+        let cmd_available = DCommand::new("which", &["thefuck"]).run();
+        let cmd_available = matches!(cmd_available, Err(CommandError::CommandFailed(_)));
 
         *self.the_fuck_available.write().unwrap() = if_path_exists || cmd_available;
         match if_path_exists || cmd_available {
@@ -49,13 +49,7 @@ impl DependencyInstallable for TheFuck {
         if *self.the_fuck_available.read().unwrap() {
             return Ok(());
         }
-
-        run_command(
-            "python3",
-            &vec!["-m", "pip3", "install", "thefuck", "--user"],
-        )?
-        .error
-        .map_or(Ok(()), |e| Err(e))?;
+        DCommand::new("python3", &["-m", "pip3", "install", "thefuck", "--user"]).run()?;
         *self.the_fuck_available.write().unwrap() = true;
         Ok(())
     }

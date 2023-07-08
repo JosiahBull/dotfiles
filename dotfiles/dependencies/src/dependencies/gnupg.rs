@@ -2,11 +2,11 @@ use std::sync::RwLock;
 
 use singleton_derive::Singleton;
 
-use super::{
-    run_command, DependencyError, DependencyInfo, DependencyInstallable, InstallationStatus,
-};
+use super::{DependencyError, DependencyInfo, DependencyInstallable, InstallationStatus};
 use crate::{
-    dependencies::package_cache_refresh::PackageCacheRefresh, OperatingSystem, OPERATING_SYSTEM,
+    command::{CommandError, DCommand},
+    dependencies::package_cache_refresh::PackageCacheRefresh,
+    OperatingSystem, OPERATING_SYSTEM,
 };
 
 #[derive(Debug, Default, Singleton)]
@@ -28,9 +28,10 @@ impl DependencyInfo for Gnupg {
 impl DependencyInstallable for Gnupg {
     fn is_installed(&self) -> Result<super::InstallationStatus, super::DependencyError> {
         // check if gnupg is installed by using `which gpg`
-        let res = run_command("which", &vec!["gpg"])?;
-        *self.gpg_available.write().unwrap() = res.success;
-        match res.success {
+        let res = DCommand::new("which", &["gpg"]).run();
+        let res = matches!(res, Err(CommandError::CommandFailed(_)));
+        *self.gpg_available.write().unwrap() = res;
+        match res {
             true => Ok(InstallationStatus::FullyInstalled),
             false => Ok(InstallationStatus::NotInstalled),
         }
@@ -45,9 +46,7 @@ impl DependencyInstallable for Gnupg {
             OperatingSystem::Ubuntu1804
             | OperatingSystem::Ubuntu2004
             | OperatingSystem::Ubuntu2204 => {
-                run_command("apt-get", &vec!["install", "-y", "gnupg"])?
-                    .error
-                    .map_or(Ok(()), |e| Err(e))?;
+                DCommand::new("apt-get", &["install", "-y", "gnupg"]).run()?;
                 *self.gpg_available.write().unwrap() = true;
             }
             //TODO: support other operating systems, with fallback to compile from source.

@@ -2,10 +2,9 @@ use std::sync::RwLock;
 
 use singleton_derive::Singleton;
 
-use super::{
-    run_command, DependencyError, DependencyInfo, DependencyInstallable, InstallationStatus,
-};
+use super::{DependencyError, DependencyInfo, DependencyInstallable, InstallationStatus};
 use crate::{
+    command::{CommandError, DCommand},
     dependencies::{
         package_cache_refresh::PackageCacheRefresh, python3::Python3, python3_dev::Python3Dev,
     },
@@ -34,9 +33,10 @@ impl DependencyInfo for SetupTools {
 
 impl DependencyInstallable for SetupTools {
     fn is_installed(&self) -> Result<InstallationStatus, DependencyError> {
-        let res = run_command("python3", &vec!["-m", "pip", "show", "setuptools"])?;
-        *self.setup_tools_available.write().unwrap() = res.success;
-        match res.success {
+        let res = DCommand::new("python3", &["-m", "pip", "show", "setuptools"]).run();
+        let res = matches!(res, Err(CommandError::CommandFailed(_)));
+        *self.setup_tools_available.write().unwrap() = res;
+        match res {
             true => Ok(InstallationStatus::FullyInstalled),
             false => Ok(InstallationStatus::NotInstalled),
         }
@@ -51,9 +51,7 @@ impl DependencyInstallable for SetupTools {
             OperatingSystem::Ubuntu1804
             | OperatingSystem::Ubuntu2004
             | OperatingSystem::Ubuntu2204 => {
-                run_command("apt-get", &vec!["install", "-y", "python3-setuptools"])?
-                    .error
-                    .map_or(Ok(()), |e| Err(e))?;
+                DCommand::new("apt-get", &["install", "-y", "python3-setuptools"]).run()?;
             }
             // TODO
             _ => return Err(DependencyError::UnsupportedOperatingSystem),

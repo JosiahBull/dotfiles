@@ -4,11 +4,12 @@ use singleton_derive::Singleton;
 
 use super::{DependencyError, DependencyInfo, DependencyInstallable, InstallationStatus};
 use crate::{
+    command::DCommand,
     dependencies::{
         apt_transport_https::AptTransportHttps, ca_certificates::CaCertificates, curl::Curl,
         gnupg::Gnupg,
     },
-    OperatingSystem, CURRENT_USER, OPERATING_SYSTEM, command::DCommand,
+    OperatingSystem, CURRENT_USER, OPERATING_SYSTEM,
 };
 
 #[derive(Default, Debug, Singleton)]
@@ -125,32 +126,24 @@ impl DependencyInstallable for Docker {
                     // sudo install -m 0755 -d /etc/apt/keyrings
                     // curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
                     // sudo chmod a+r /etc/apt/keyrings/docker.gpg
-                    run_command("install", &vec!["-m", "0755", "-d", "/etc/apt/keyrings"])?
-                        .error
-                        .map_or(Ok(()), |e| Err(e))?;
-                    run_command("sh", &vec![
-                        "-c",
-                        "curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg",
-                    ])?.error.map_or(Ok(()), |e| Err(e))?;
-                    run_command("chmod", &vec!["a+r", "/etc/apt/keyrings/docker.gpg"])?
-                        .error
-                        .map_or(Ok(()), |e| Err(e))?;
+                    DCommand::new("install", &["-m", "0755", "-d", "/etc/apt/keyrings"]).run()?;
+                    // XXX: Piping is an anti-pattern, multi-stage these commands
+                    DCommand::new(
+                        "curl",
+                        &[
+                            "-fsSL",
+                            "https://download.docker.com/linux/ubuntu/gpg",
+                            "|",
+                            "sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg",
+                        ],
+                    )
+                    .run()?;
+                    DCommand::new("chmod", &["a+r", "/etc/apt/keyrings/docker.gpg"]).run()?;
 
                     // add docker repo
                     // echo "deb [arch="$(dpkg --print-architecture)" signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu "$(. /etc/os-release && echo "$VERSION_CODENAME")" stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-                    run_command(
-                        "sh",
-                        &vec![
-                            "-c",
-                            "echo \"deb [arch=\"$(dpkg --print-architecture)\" signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \"$(. /etc/os-release && echo \"$VERSION_CODENAME\")\" stable\" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null",
-                        ],
-                    )?.error.map_or(Ok(()), |e| Err(e))?;
-
-                    // update apt
-                    // sudo apt-get update
-                    run_command("apt-get", &vec!["update"])?
-                        .error
-                        .map_or(Ok(()), |e| Err(e))?;
+                    DCommand::new("deb", &["[arch=\"$(dpkg --print-architecture)\" signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \"$(. /etc/os-release && echo \"$VERSION_CODENAME\")\" stable\" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null"]).run()?;
+                    DCommand::new("apt-get", &["update"]).run()?;
 
                     *self.repo_available.write().unwrap() = true;
                 }
@@ -158,9 +151,9 @@ impl DependencyInstallable for Docker {
                 // if docker is not installed, install it
                 if !*self.docker_installed.read().unwrap() {
                     // sudo apt-get install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-                    run_command(
+                    DCommand::new(
                         "apt-get",
-                        &vec![
+                        &[
                             "install",
                             "-y",
                             "docker-ce",
@@ -169,36 +162,29 @@ impl DependencyInstallable for Docker {
                             "docker-buildx-plugin",
                             "docker-compose-plugin",
                         ],
-                    )?
-                    .error
-                    .map_or(Ok(()), |e| Err(e))?;
+                    )
+                    .run()?;
                     *self.docker_installed.write().unwrap() = true;
                 }
 
                 // if docker service is not enabled, enable it
                 if !*self.docker_service_enabled.read().unwrap() {
                     // sudo systemctl enable docker.service
-                    run_command("systemctl", &vec!["enable", "docker.service"])?
-                        .error
-                        .map_or(Ok(()), |e| Err(e))?;
+                    DCommand::new("systemctl", &["enable", "docker.service"]).run()?;
                     *self.docker_service_enabled.write().unwrap() = true;
                 }
 
                 // if docker service is not running, start it
                 if !*self.docker_service_running.read().unwrap() {
                     // sudo systemctl start docker.service
-                    run_command("systemctl", &vec!["start", "docker.service"])?
-                        .error
-                        .map_or(Ok(()), |e| Err(e))?;
+                    DCommand::new("systemctl", &["start", "docker.service"]).run()?;
                     *self.docker_service_running.write().unwrap() = true;
                 }
 
                 // if user is not in docker group, add them
                 if !*self.user_in_docker_group.read().unwrap() {
                     // sudo usermod -aG docker $USER
-                    run_command("usermod", &vec!["-aG", "docker", &*CURRENT_USER])?
-                        .error
-                        .map_or(Ok(()), |e| Err(e))?;
+                    DCommand::new("usermod", &["-aG", "docker", &*CURRENT_USER]).run()?;
                     *self.user_in_docker_group.write().unwrap() = true;
                 }
 

@@ -1,10 +1,9 @@
 use singleton_derive::Singleton;
 use std::{fs::metadata, sync::RwLock};
 
-use super::{
-    run_command, DependencyError, DependencyInfo, DependencyInstallable, InstallationStatus,
-};
+use super::{DependencyError, DependencyInfo, DependencyInstallable, InstallationStatus};
 use crate::{
+    command::{CommandError, DCommand},
     dependencies::{nodejs::NodeJs, package_cache_refresh::PackageCacheRefresh, zshrc::Zshrc},
     OperatingSystem, HOME_DIR, OPERATING_SYSTEM,
 };
@@ -34,8 +33,14 @@ impl DependencyInfo for Yarn {
         vec![NodeJs::singleton()]
     }
 
-    fn optional(&self) -> Vec<&'static dyn DependencyInstallable> {
-        vec![Zshrc::singleton()]
+    fn optional(
+        &self,
+    ) -> Vec<(
+        &'static str,
+        &'static str,
+        &'static dyn DependencyInstallable,
+    )> {
+        vec![("zshrc", "Will automatically load zshrc", Zshrc::singleton())]
     }
 }
 
@@ -43,7 +48,8 @@ impl DependencyInstallable for Yarn {
     fn is_installed(&self) -> Result<InstallationStatus, DependencyError> {
         // check if yarn is installed by using `which yarn` OR if yarn is in path with which yarn
         let yarn_bin = metadata(&*YARN_BIN_PATH).is_ok();
-        let yarn_which = run_command("which", &vec!["yarn"])?.success;
+        let yarn_which = DCommand::new("which", &["yarn"]).run();
+        let yarn_which = matches!(yarn_which, Err(CommandError::CommandFailed(_)));
         *self.yarn_available.write().unwrap() = yarn_bin || yarn_which;
 
         // check if yarn is in EITHER of .zshrc or .bashrc

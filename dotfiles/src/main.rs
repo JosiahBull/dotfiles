@@ -17,12 +17,12 @@ mod handler;
 mod tui;
 mod ui;
 
-use std::io;
+use std::{io, process::exit};
 
 use app::{App, AppResult};
 use dependencies::{
-    all_installable, DependencyInstallable, InstallationStatus, CURRENT_USER, HOME_DIR,
-    OPERATING_SYSTEM, DependencyGraph,
+    all_top_level, DependencyGraph, DependencyInstallable, InstallationStatus,
+    PowerLevel10k, Zshrc, CURRENT_USER, HOME_DIR, OPERATING_SYSTEM,
 };
 use event::{Event, EventHandler};
 use handler::handle_key_events;
@@ -91,36 +91,36 @@ impl OperatingSystem {
     }
 }
 
-// fn main() -> AppResult<()> {
-//     // Create an application.
-//     let mut app = App::new();
+fn main() -> AppResult<()> {
+    // Create an application.
+    let mut app = App::new();
 
-//     // Initialize the terminal user interface.
-//     let backend = CrosstermBackend::new(io::stderr());
-//     let terminal = Terminal::new(backend)?;
-//     let events = EventHandler::new(500);
-//     let mut tui = Tui::new(terminal, events);
-//     tui.init()?;
+    // Initialize the terminal user interface.
+    let backend = CrosstermBackend::new(io::stderr());
+    let terminal = Terminal::new(backend)?;
+    let events = EventHandler::new(500);
+    let mut tui = Tui::new(terminal, events);
+    tui.init()?;
 
-//     // Start the main loop.
-//     while app.running {
-//         // Render the user interface.
-//         tui.draw(&mut app)?;
-//         // Handle events.
-//         match tui.events.next()? {
-//             Event::Tick => app.tick(),
-//             Event::Key(key_event) => handle_key_events(key_event, &mut app)?,
-//             Event::Mouse(_) => {}
-//             Event::Resize(_, _) => {}
-//         }
-//     }
+    // Start the main loop.
+    while app.running {
+        // Render the user interface.
+        tui.draw(&mut app)?;
+        // Handle events.
+        match tui.events.next()? {
+            Event::Tick => app.tick(),
+            Event::Key(key_event) => handle_key_events(key_event, &mut app)?,
+            Event::Mouse(_) => {}
+            Event::Resize(_, _) => {}
+        }
+    }
 
-//     // Exit the user interface.
-//     tui.exit()?;
-//     Ok(())
-// }
+    // Exit the user interface.
+    tui.exit()?;
+    Ok(())
+}
 
-fn main() {
+fn main_old() {
     // TODO: setup clap to parse arguments,
     // TODO: setup reading from a version file that gets written
     // TODO: setup proper logging with a very aggressive log level
@@ -150,7 +150,13 @@ fn main() {
         std::process::exit(1);
     }
 
-    let to_install: Vec<&dyn DependencyInstallable> = all_installable();
+    // let mut dep_graph: DependencyGraph = DependencyGraph::new();
+    // let all_top_level = all_top_level();
+    // dep_graph.add_nodes(all_top_level).unwrap();
+
+    // println!("Dependency graph: {:#?}", dep_graph);
+
+    let to_install: Vec<&dyn DependencyInstallable> = all_top_level();
 
     fn recursively_install_dependencies(
         dependency: &dyn DependencyInstallable,

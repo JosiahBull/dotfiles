@@ -2,10 +2,12 @@ use std::{fs::metadata, sync::RwLock};
 
 use singleton_derive::Singleton;
 
-use super::{
-    run_command, DependencyError, DependencyInfo, DependencyInstallable, InstallationStatus,
+use super::{DependencyError, DependencyInfo, DependencyInstallable, InstallationStatus};
+use crate::{
+    command::{CommandError, DCommand},
+    dependencies::rust::Rust,
+    HOME_DIR,
 };
-use crate::{dependencies::rust::Rust, HOME_DIR};
 use lazy_static::lazy_static;
 
 lazy_static! {
@@ -33,7 +35,8 @@ impl DependencyInstallable for Tokei {
     fn is_installed(&self) -> Result<InstallationStatus, DependencyError> {
         // check if tokei is present in file, or as cmd
         let is_present = metadata(&*BAT_PATH).is_ok();
-        let cmd_available = run_command("which", &vec!["tokei"])?.success;
+        let cmd_available = DCommand::new("which", &["tokei"]).run();
+        let cmd_available = matches!(cmd_available, Err(CommandError::CommandFailed(_)));
         *self.tokei_available.write().unwrap() = is_present || cmd_available;
         match is_present || cmd_available {
             true => Ok(InstallationStatus::FullyInstalled),
@@ -45,10 +48,7 @@ impl DependencyInstallable for Tokei {
         if *self.tokei_available.read().unwrap() {
             return Ok(());
         }
-
-        run_command("cargo", &["install", "tokei"])?
-            .error
-            .map_or(Ok(()), |e| Err(e))?;
+        DCommand::new("cargo", &["install", "tokei"]).run()?;
         *self.tokei_available.write().unwrap() = true;
 
         Ok(())
