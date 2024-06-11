@@ -1,7 +1,6 @@
 alias lh='ls -lhrt'
 alias c='clear'
 alias v='vim'
-alias di='sudo dnf install'
 alias v='vi'
 alias rmd='yes | rm -r'
 alias rsync-copy="rsync -avz --progress -h"
@@ -9,4 +8,5 @@ alias rsync-move="rsync -avz --progress -h --remove-source-files"
 alias rsync-update="rsync -avzu --progress -h"
 alias rsync-synchronize="rsync -avzu --delete --progress -h"
 alias e='exit 0'
-alias reboot-windows="sudo grub2-reboot 'Windows Boot Manager (on /dev/sda1)' && sudo reboot"
+alias cat='bat'
+alias upgrade-all='update-all'

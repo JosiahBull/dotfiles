@@ -50,3 +50,5 @@ GPG_TTY="$(tty)"
 export GPG_TTY
 
 export PATH=$PATH:/usr/local/go/bin
+
+export RUSTC_WRAPPER=sccache

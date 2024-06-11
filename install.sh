@@ -87,6 +87,18 @@ curl -o- -L https://yarnpkg.com/install.sh | bash
 # Install Rust
 curl https://sh.rustup.rs -sSf | sh -s -- -y
 
+# Install rust programs from source
+cargo install bat
+cargo install ripgrep
+cargo install ripgrep_all
+cargo install cargo-workspaces
+cargo install cargo-tarpaulin
+cargo install cargo-udeps
+cargo install tokei
+cargo install cargo-expand
+cargo install license-generator
+cargo install sccache
+
 # chsh to zsh
 sudo chsh "$USER" -s "$(which zsh)"
 
