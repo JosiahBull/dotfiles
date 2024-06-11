@@ -1,12 +1,6 @@
 #!/bin/bash
 # shellcheck disable=SC1091
 
-# read if the --reduced flag is set
-reduced=false
-if [[ $1 == "--reduced" ]]; then
-    reduced=true
-fi
-
 # create a temporary directory to work in
 tmpdir=$(mktemp -d)
 
@@ -21,7 +15,7 @@ then
         sudo /usr/bin/crb enable
     fi
 
-    sudo dnf install -y zsh vim tmux curl neovim git gpg python3 util-linux-user openssh-askpass python3-pip gcc cmake tar firefox
+    sudo dnf install -y zsh vim tmux curl neovim git gpg python3 util-linux-user openssh-askpass python3-pip gcc cmake tar firefox golang
     echo "dnf complete"
 # check if apt command exists
 elif command -v apt &> /dev/null
@@ -37,7 +31,7 @@ then
         fi
     fi
 
-    sudo apt install -y zsh vim tmux curl neovim git gpg python3 ssh-askpass build-essential python3-pip gcc cmake tar
+    sudo apt install -y zsh vim tmux curl neovim git gpg python3 ssh-askpass build-essential python3-pip gcc cmake tar golang
     echo "apt complete"
 else
     echo "Could not install packages no package manager found"
@@ -54,8 +48,8 @@ git submodule update --init --recursive --depth 2
 
 # begin installation of dotfiles
 
-# copy .scripts folder to $HOME/.scripts
-cp -r "$tmpdir/.scripts" "$HOME/.scripts"
+# clone https://github.com/JosiahBull/shell-scripts/tree/main to $HOME/.scripts
+git clone https://github.com/JosiahBull/shell-scripts/tree/main "$HOME"/.scripts
 
 # install relevant zsh plugins
 cp "$tmpdir/zsh/.zshrc" "$HOME/.zshrc"
@@ -74,28 +68,24 @@ cp "$tmpdir/ssh_config" "$HOME/.ssh/config"
 # copy ssh keys from https://github.com/josiahBull.keys to ~/.ssh/authorized_keys
 curl https://github.com/josiahbull.keys >> ~/.ssh/authorized_keys
 
-######## START OPTIONAL INSTALL ########
-if [ $reduced = false ]; then
-    # Install NVM
-    curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.2/install.sh | bash
-    source "$HOME/.nvm/nvm.sh"
-    nvm install 'lts/*' --reinstall-packages-from=current
+# Install NVM
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.2/install.sh | bash
+source "$HOME/.nvm/nvm.sh"
+nvm install 'lts/*' --reinstall-packages-from=current
 
-    # Install Yarn
-    curl -o- -L https://yarnpkg.com/install.sh | bash
+# Install Yarn
+curl -o- -L https://yarnpkg.com/install.sh | bash
 
-    # Add to .zshrc
-    {
-        echo "export NVM_DIR=\"$HOME/.nvm\""
-        echo "[ -s \"\$NVM_DIR/nvm.sh\" ] && \. \"\$NVM_DIR/nvm.sh\""
-        echo "[ -s \"\$NVM_DIR/bash_completion\" ] && \. \"\$NVM_DIR/bash_completion\""
-        echo "export PATH=\"\$HOME/.yarn/bin:\$HOME/.config/yarn/global/node_modules/.bin:\$PATH\""
-    } >> "$HOME/.zshrc"
+# Add to .zshrc
+{
+    echo "export NVM_DIR=\"$HOME/.nvm\""
+    echo "[ -s \"\$NVM_DIR/nvm.sh\" ] && \. \"\$NVM_DIR/nvm.sh\""
+    echo "[ -s \"\$NVM_DIR/bash_completion\" ] && \. \"\$NVM_DIR/bash_completion\""
+    echo "export PATH=\"\$HOME/.yarn/bin:\$HOME/.config/yarn/global/node_modules/.bin:\$PATH\""
+} >> "$HOME/.zshrc"
 
-    # install rust
-    curl https://sh.rustup.rs -sSf | sh -s -- -y
-fi
-######## END OPTIONAL INSTALL ########
+# Install Rust
+curl https://sh.rustup.rs -sSf | sh -s -- -y
 
 # chsh to zsh
 sudo chsh "$USER" -s "$(which zsh)"

@@ -1,6 +1,10 @@
-[gpg]
-	program = gpg2
 [commit]
 	gpgsign = true
 [init]
 	defaultBranch = main
+[gpg]
+	program = gpg2
+[help]
+	autocorrect = 5
+[pull]
+	rebase = true

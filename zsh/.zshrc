@@ -26,7 +26,6 @@ plugins=(
     grc
     cp
     urltools
-    safe-paste
     tmux
     universalarchive
     sudo
@@ -49,3 +48,5 @@ eval "$(thefuck --alias)"
 
 GPG_TTY="$(tty)"
 export GPG_TTY
+
+export PATH=$PATH:/usr/local/go/bin
