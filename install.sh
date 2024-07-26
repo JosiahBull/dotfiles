@@ -48,8 +48,8 @@ git submodule update --init --recursive --depth 2
 
 # begin installation of dotfiles
 
-# clone https://github.com/JosiahBull/shell-scripts/tree/main to $HOME/.scripts
-git clone https://github.com/JosiahBull/shell-scripts/tree/main "$HOME"/.scripts
+# clone https://github.com/JosiahBull/shell-scripts to $HOME/.scripts
+git clone https://github.com/JosiahBull/shell-scripts "$HOME"/.scripts
 
 # install relevant zsh plugins
 cp "$tmpdir/zsh/.zshrc" "$HOME/.zshrc"
