@@ -1,7 +1,7 @@
 #!/bin/bash
 # shellcheck disable=SC1091
 
-set -o errexit -o pipefail -o noclobber -o nounset
+set -o errexit -o pipefail -o noclobber
 
 # create a temporary directory to work in
 tmpdir=$(mktemp -d)
@@ -113,6 +113,7 @@ curl -o- -L https://yarnpkg.com/install.sh | bash
 
 # Install Rust
 curl https://sh.rustup.rs -sSf | sh -s -- -y
+. "$HOME/.cargo/env"
 
 # Install rust programs from source
 cargo install bat
@@ -127,14 +128,13 @@ cargo install license-generator
 # chsh to zsh
 chsh "$USER" -s "$(which zsh)"
 
-# create a new ed25519 keypair for this machine
-ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519 -C josiah
-
-# add the new key to the ssh agent
-ssh-add ~/.ssh/id_ed25519
-
-# add our own key to authorized_keys
-cat ~/.ssh/id_ed25519.pub >> ~/.ssh/authorized_keys
+# create a new ed25519 keypair for this machine, if we are in a DE and a key doesn't exist already.
+# XXX: Could we improve the session detection here...? DE == headless so no tty mb?
+if [ -n "$DESKTOP_SESSION" ] && [ ! -f ~/.ssh/id_ed25519 ]; then
+    ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519 -C josiah
+    ssh-add ~/.ssh/id_ed25519
+    cat ~/.ssh/id_ed25519.pub >> ~/.ssh/authorized_keys
+fi
 
 # grab all keys from https://github.com/JosiahBull.keys and add them to authorized_keys
 curl https://github.com/JosiahBull.keys >> ~/.ssh/authorized_keys
