@@ -1,7 +1,7 @@
 #!/bin/bash
 # shellcheck disable=SC1091
 
-set -o errexit -o pipefail -o noclobber -o nounset
+set -o errexit -o pipefail -o noclobber
 
 # create a temporary directory to work in
 tmpdir=$(mktemp -d)
