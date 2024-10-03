@@ -34,6 +34,9 @@ repos:
       - id: check-added-large-files
         args: [--maxkb=1000]
         exclude: ^(\./\.scripts/|\./zsh/ohmyzsh/|\./zsh/powerlevel10k/|zsh/\.p10k\.zsh)
+
+      - id: check-merge-conflict
+
   - repo: https://github.com/psf/black
     rev: 24.8.0
     hooks:
