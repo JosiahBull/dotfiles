@@ -1,37 +1,64 @@
 #!/bin/bash
 # shellcheck disable=SC1091
 
+set -o errexit -o pipefail -o noclobber -o nounset
+
 # create a temporary directory to work in
 tmpdir=$(mktemp -d)
+
+# Check if root, throw error if not.
+if [ "$EUID" -ne 0 ]; then
+    echo "Please run as root"
+    exit 1
+fi
 
 # check if dnf command exists
 if command -v dnf &> /dev/null
 then
-    sudo dnf update -y
+    dnf update -y
 
     # if rocky linux, install epel-release
     if [ -f /etc/rocky-release ]; then
-        sudo dnf install -y epel-release
-        sudo /usr/bin/crb enable
+        dnf install -y epel-release
+        /usr/bin/crb enable
     fi
 
-    sudo dnf install -y zsh vim tmux curl neovim git gpg python3 util-linux-user openssh-askpass python3-pip gcc cmake tar firefox golang
+    dnf install -y zsh vim tmux curl neovim git gpg python3 util-linux-user openssh-askpass python3-pip gcc cmake tar firefox golang
+
+    # Check if DESKTOP_SESSION is set, and install vscode if so.
+    if [ -n "$DESKTOP_SESSION" ]; then
+        rpm --import https://packages.microsoft.com/keys/microsoft.asc
+        echo -e "[code]\nname=Visual Studio Code\nbaseurl=https://packages.microsoft.com/yumrepos/vscode\nenabled=1\ngpgcheck=1\ngpgkey=https://packages.microsoft.com/keys/microsoft.asc" | sudo tee /etc/yum.repos.d/vscode.repo > /dev/null
+        dnf check-update
+        dnf install code
+    fi
+
     echo "dnf complete"
 # check if apt command exists
 elif command -v apt &> /dev/null
 then
-    sudo apt-get update && sudo apt-get upgrade -y
+    apt-get update && apt-get upgrade -y
 
     # if debian 11, install firefox-esr otherwise install firefox
     if [ -f /etc/debian_version ]; then
         if [ "$(cut -d '.' -f 1 /etc/debian_version)" == "11" ]; then
-            sudo apt install -y firefox-esr
+            apt install -y firefox-esr
         else
-            sudo apt install -y firefox
+            apt install -y firefox
         fi
     fi
 
-    sudo apt install -y zsh vim tmux curl neovim git gpg python3 ssh-askpass build-essential python3-pip gcc cmake tar golang
+    apt-get install -y zsh vim tmux curl neovim git gpg python3 ssh-askpass build-essential python3-pip gcc cmake tar golang apt-transport-https
+
+    # Check if DESKTOP_SESSION is set, and install vscode if so.
+    if [ -n "$DESKTOP_SESSION" ]; then
+        curl -sSL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor > packages.microsoft.gpg
+        install -D -o root -g root -m 644 packages.microsoft.gpg /etc/apt/keyrings/packages.microsoft.gpg
+        echo "deb [arch=amd64,arm64,armhf signed-by=/etc/apt/keyrings/packages.microsoft.gpg] https://packages.microsoft.com/repos/code stable main" |sudo tee /etc/apt/sources.list.d/vscode.list > /dev/null
+        rm -f packages.microsoft.gpg
+        apt-get install code
+    fi
+
     echo "apt complete"
 else
     echo "Could not install packages no package manager found"
@@ -39,7 +66,7 @@ else
 fi
 
 # install python modules
-sudo pip3 install thefuck
+pip3 install thefuck pre-commit
 
 # clone the current repository into a temporary directory, recursively with submodules
 git clone https://github.com/JosiahBull/dotfiles "$tmpdir"
@@ -90,17 +117,15 @@ curl https://sh.rustup.rs -sSf | sh -s -- -y
 # Install rust programs from source
 cargo install bat
 cargo install ripgrep
-cargo install ripgrep_all
 cargo install cargo-workspaces
 cargo install cargo-tarpaulin
 cargo install cargo-udeps
 cargo install tokei
 cargo install cargo-expand
 cargo install license-generator
-cargo install sccache
 
 # chsh to zsh
-sudo chsh "$USER" -s "$(which zsh)"
+chsh "$USER" -s "$(which zsh)"
 
 # create a new ed25519 keypair for this machine
 ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519 -C josiah
@@ -110,6 +135,9 @@ ssh-add ~/.ssh/id_ed25519
 
 # add our own key to authorized_keys
 cat ~/.ssh/id_ed25519.pub >> ~/.ssh/authorized_keys
+
+# grab all keys from https://github.com/JosiahBull.keys and add them to authorized_keys
+curl https://github.com/JosiahBull.keys >> ~/.ssh/authorized_keys
 
 # clean up the temporary directory
 rm -rdf "$tmpdir"
