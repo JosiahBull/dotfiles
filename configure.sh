@@ -35,26 +35,17 @@ then
         /usr/bin/crb enable
     fi
 
-    sudo dnf install -y zsh vim tmux curl neovim git gpg python3 util-linux-user openssh-askpass python3-pip gcc cmake tar firefox golang python3-venv
+    sudo dnf install -y zsh vim tmux curl git gpg python3 util-linux-user openssh-askpass python3-pip gcc cmake tar golang python3-venv
 
     echo "dnf complete"
-# check if apt command exists
-elif command -v apt &> /dev/null
+# check if apt-get command exists
+elif command -v apt-get &> /dev/null
 then
     sudo apt-get update && sudo apt-get upgrade -y
 
-    # if debian 11, install firefox-esr otherwise install firefox
-    if [ -f /etc/debian_version ]; then
-        if [ "$(cut -d '.' -f 1 /etc/debian_version)" == "11" ]; then
-            sudo apt install -y firefox-esr
-        else
-            sudo apt install -y firefox
-        fi
-    fi
+    sudo apt-get install -y zsh vim tmux curl git gpg python3 ssh-askpass build-essential python3-pip gcc cmake tar golang apt-transport-https python3-venv
 
-    sudo apt-get install -y zsh vim tmux curl neovim git gpg python3 ssh-askpass build-essential python3-pip gcc cmake tar golang apt-transport-https python3-venv
-
-    echo "apt complete"
+    echo "apt-get complete"
 else
     echo "Could not install packages no package manager found"
     exit 1
