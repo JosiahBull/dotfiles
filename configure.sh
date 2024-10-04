@@ -122,6 +122,8 @@ cargo binstall --no-confirm cargo-workspaces
 cargo binstall --no-confirm license-generator
 cargo binstall --no-confirm ripgrep
 cargo binstall --no-confirm tokei
+
+# These MUST be built from source because they require OpenSSL.
 cargo install cargo-tarpaulin --features "vendored-openssl"
 cargo install cargo-udeps --features "vendored-openssl"
 cargo install cargo-update --features "vendored-openssl"
