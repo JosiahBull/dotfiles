@@ -61,6 +61,7 @@ else
 fi
 
 # install python modules
+# I mostly only use `thefuck` for creating new git branches... eventually I'll replace it with a handful of shell scripts. :P
 python3 -m venv ~/.local --system-site-packages
 ~/.local/bin/pip install thefuck pre-commit
 
@@ -124,10 +125,14 @@ cargo install tokei
 # cargo install zoxide # TODO: actually start using zoxide!
 
 # chsh to zsh
-chsh "$USER" -s "$(which zsh)"
+chsh -s "$(which zsh)"
 
 # create a new ed25519 keypair for this machine, if we are in a DE and a key doesn't exist already.
 ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519 -C josiah
+if [ -z "$SSH_AGENT_PID" ]; then
+    echo "No SSH agent found. Starting a new SSH agent..."
+    eval "$(ssh-agent -s)"
+fi
 ssh-add ~/.ssh/id_ed25519
 cat ~/.ssh/id_ed25519.pub >> ~/.ssh/authorized_keys
 
