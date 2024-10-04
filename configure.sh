@@ -73,6 +73,7 @@ git clone https://github.com/zsh-users/zsh-autosuggestions ~/.oh-my-zsh/custom/p
 git clone https://github.com/zsh-users/zsh-syntax-highlighting.git ~/.oh-my-zsh/custom/plugins/zsh-syntax-highlighting
 
 # install ssh and git settings
+mkdir "$HOME/.ssh"
 cp "$tmpdir/.gitconfig" "$HOME/.gitconfig"
 cp "$tmpdir/ssh_config" "$HOME/.ssh/config"
 
