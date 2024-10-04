@@ -69,8 +69,6 @@ python3 -m venv ~/.local --system-site-packages
 cd "$tmpdir" || exit
 
 # begin installation of dotfiles
-
-# clone https://github.com/JosiahBull/shell-scripts to $HOME/.scripts
 git clone https://github.com/JosiahBull/shell-scripts "$HOME"/.scripts
 
 # install relevant zsh plugins
