@@ -83,7 +83,7 @@ curl https://github.com/josiahbull.keys >> ~/.ssh/authorized_keys
 # Install NVM
 curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.2/install.sh | bash
 source "$HOME/.nvm/nvm.sh"
-nvm install 'lts/*'
+nvm install 'lts/*' --reinstall-packages-from=current
 
 # Install Yarn
 curl -o- -L https://yarnpkg.com/install.sh | bash
