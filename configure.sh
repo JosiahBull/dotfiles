@@ -110,18 +110,23 @@ curl -o- -L https://yarnpkg.com/install.sh | bash
 curl https://sh.rustup.rs -sSf | sh -s -- -y
 . "$HOME/.cargo/env"
 
-# Install rust programs from source
-cargo install bat
-cargo install cargo-autoinherit
-cargo install cargo-expand
-cargo install cargo-semver-checks
+# Install various Rust tools. To save compute we'll prefer binaries and fall back to building from source.
+# First, install cargo-binstall
+curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
+
+# Then, install the rest of the programs
+# XXX: Eventually we want to enable sign checking on packages here...
+cargo binstall --no-confirm bat
+cargo binstall --no-confirm cargo-autoinherit
+cargo binstall --no-confirm cargo-expand
+cargo binstall --no-confirm cargo-semver-checks
+cargo binstall --no-confirm cargo-workspaces
+cargo binstall --no-confirm license-generator
+cargo binstall --no-confirm ripgrep
+cargo binstall --no-confirm tokei
 cargo install cargo-tarpaulin --features "vendored-openssl"
 cargo install cargo-udeps --features "vendored-openssl"
 cargo install cargo-update --features "vendored-openssl"
-cargo install cargo-workspaces
-cargo install license-generator
-cargo install ripgrep
-cargo install tokei
 # cargo install zoxide # TODO: actually start using zoxide!
 
 # chsh to zsh
