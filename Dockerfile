@@ -11,10 +11,8 @@ ENV TZ=Pacific/Auckland
 RUN apt-get update && apt-get install -y curl tzdata sudo git
 
 # Install dotfiles.
-RUN --mount=type=bind,source=.,target=/dotfiles,readonly \
-    cp -r /dotfiles /root/.dotfiles && \
-    /root/.dotfiles/configure.sh "/root/.dotfiles" && \
-    rm -rf /root/.dotfiles
+RUN --mount=type=bind,source=.,target=/tmp/dotfiles,readonly \
+    /tmp/dotfiles/configure.sh "/tmp/dotfiles"
 
 # Set the shell to zsh
 RUN chsh -s /bin/zsh

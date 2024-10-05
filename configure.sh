@@ -135,6 +135,3 @@ cat ~/.ssh/id_ed25519.pub >> ~/.ssh/authorized_keys
 
 # grab all keys from https://github.com/JosiahBull.keys and add them to authorized_keys
 curl https://github.com/JosiahBull.keys >> ~/.ssh/authorized_keys
-
-# clean up the temporary directory
-rm -rdf "$tmpdir"
