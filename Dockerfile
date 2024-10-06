@@ -7,12 +7,19 @@ RUN echo "Acquire::http::Pipeline-Depth 0;" > /etc/apt/apt.conf.d/99custom && \
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=Pacific/Auckland
-# Intentionally not cleaning up here as I use the apt-lists when working.
-RUN apt-get update && apt-get install -y curl tzdata sudo git
+RUN apt-get update && apt-get install -y curl tzdata sudo git && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Install dotfiles.
 RUN --mount=type=bind,source=.,target=/tmp/dotfiles,readonly \
-    /tmp/dotfiles/configure.sh "/tmp/dotfiles"
+    cp -r /tmp/dotfiles /tmp/dotfiles-copy && \
+    cd /tmp/dotfiles-copy && \
+    git submodule update --init --recursive --depth 2 && \
+    ./configure.sh && \
+    # Cleanup after installation
+    rm -rf /tmp/dotfiles-copy && \
+    # Cleanup the apt lists (again).
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Set the shell to zsh
 RUN chsh -s /bin/zsh
