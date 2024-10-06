@@ -131,7 +131,7 @@ cargo binstall --no-confirm zoxide
 
 # We remove Rust and cargo-binstall after we're done installing the tools and just keep the binaries.
 # NOTE: Rustup toolchains consume 1.2GB of space in the image... which is frankly insane.
-cargo uninstall -y cargo-binstall
+cargo uninstall cargo-binstall
 rustup self uninstall -y
 
 # create a new ed25519 keypair for this machine, if we are in a DE and a key doesn't exist already.
