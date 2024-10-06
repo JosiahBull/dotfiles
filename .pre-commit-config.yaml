@@ -1,6 +1,6 @@
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.0.0
+    rev: v5.0.0
     hooks:
       - id: check-yaml
         exclude: ^(\./\.scripts/|\./zsh/ohmyzsh/|\./zsh/powerlevel10k/|zsh/\.p10k\.zsh)
