@@ -114,18 +114,17 @@ curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-
 
 # Then, install the rest of the programs - ideally using a binary but we will fallback to building.
 # XXX: Eventually we want to enable sign checking on packages here...
-cargo binstall --no-confirm bat
-cargo binstall --no-confirm cargo-autoinherit
-cargo binstall --no-confirm cargo-expand
-cargo binstall --no-confirm cargo-semver-checks
-cargo binstall --no-confirm cargo-tarpaulin
-cargo binstall --no-confirm cargo-udeps
-cargo binstall --no-confirm cargo-update
-cargo binstall --no-confirm cargo-workspaces
-cargo binstall --no-confirm license-generator
-cargo binstall --no-confirm ripgrep
-cargo binstall --no-confirm tokei
-cargo binstall --no-confirm zoxide
+cargo binstall --no-confirm bat && mv ~/.cargo/bin/bat ~/.local/bin
+cargo binstall --no-confirm cargo-autoinherit && mv ~/.cargo/bin/cargo-autoinherit ~/.local/bin
+cargo binstall --no-confirm cargo-expand && mv ~/.cargo/bin/cargo-expand ~/.local/bin
+cargo binstall --no-confirm cargo-semver-checks && mv ~/.cargo/bin/cargo-semver-checks ~/.local/bin
+cargo binstall --no-confirm cargo-tarpaulin && mv ~/.cargo/bin/cargo-tarpaulin ~/.local/bin
+cargo binstall --no-confirm cargo-udeps && mv ~/.cargo/bin/cargo-udeps ~/.local/bin
+cargo binstall --no-confirm cargo-workspaces && mv ~/.cargo/bin/cargo-workspaces ~/.local/bin
+cargo binstall --no-confirm license-generator && mv ~/.cargo/bin/license-generator ~/.local/bin
+cargo binstall --no-confirm ripgrep && mv ~/.cargo/bin/rg ~/.local/bin
+cargo binstall --no-confirm tokei && mv ~/.cargo/bin/tokei ~/.local/bin
+cargo binstall --no-confirm zoxide && mv ~/.cargo/bin/zoxide ~/.local/bin
 # XXX: Some of these should be installed with a wrapper script at first invocation/checks for updates
 # after that... but that's a problem for future me.
 
