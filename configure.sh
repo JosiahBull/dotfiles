@@ -34,9 +34,13 @@ then
         /usr/bin/crb enable
     fi
 
+<<<<<<< Updated upstream
     # Install python utils.
     echo ">>> Installing python utils"
     sudo dnf install -y python3 python3-pip python3-venv
+=======
+    sudo dnf install -y zsh tmux curl git gpg python3 util-linux-user openssh-askpass python3-pip gcc cmake tar python3-venv golang
+>>>>>>> Stashed changes
 
     # Install other applications.
     echo ">>> Installing other applications"
@@ -49,6 +53,7 @@ then
     echo ">>> apt-get found, updating"
     sudo apt-get update && sudo apt-get upgrade -y
 
+<<<<<<< Updated upstream
     # Install python utils.
     echo ">>> Installing python utils"
     sudo apt-get install -y python3 python3-pip python3-venv
@@ -56,6 +61,9 @@ then
     # Install other applications.
     echo ">>> Installing other utils"
     sudo apt-get install -y zsh tmux curl git gpg tar
+=======
+    sudo apt-get install -y zsh tmux curl git gpg python3 ssh-askpass build-essential python3-pip tar apt-transport-https python3-venv golang
+>>>>>>> Stashed changes
 
     echo "apt-get complete"
 else
