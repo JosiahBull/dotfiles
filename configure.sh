@@ -34,13 +34,9 @@ then
         /usr/bin/crb enable
     fi
 
-<<<<<<< Updated upstream
     # Install python utils.
     echo ">>> Installing python utils"
-    sudo dnf install -y python3 python3-pip python3-venv
-=======
-    sudo dnf install -y zsh tmux curl git gpg python3 util-linux-user openssh-askpass python3-pip gcc cmake tar python3-venv golang
->>>>>>> Stashed changes
+    sudo dnf install -y python3-pip python3-venv
 
     # Install other applications.
     echo ">>> Installing other applications"
@@ -53,7 +49,6 @@ then
     echo ">>> apt-get found, updating"
     sudo apt-get update && sudo apt-get upgrade -y
 
-<<<<<<< Updated upstream
     # Install python utils.
     echo ">>> Installing python utils"
     sudo apt-get install -y python3 python3-pip python3-venv
@@ -61,9 +56,6 @@ then
     # Install other applications.
     echo ">>> Installing other utils"
     sudo apt-get install -y zsh tmux curl git gpg tar
-=======
-    sudo apt-get install -y zsh tmux curl git gpg python3 ssh-askpass build-essential python3-pip tar apt-transport-https python3-venv golang
->>>>>>> Stashed changes
 
     echo "apt-get complete"
 else
@@ -105,11 +97,13 @@ cp "$tmpdir/ssh_config" "$HOME/.ssh/config"
 # copy ssh keys from https://github.com/josiahBull.keys to ~/.ssh/authorized_keys
 # Just in case someone else is using this script, we'll print a large obvious warning with a delay
 # so they can cancel the script if they don't want to add my keys to their authorized_keys file.
-echo "============================================================="
-echo "WARNING: Adding my SSH keys to your authorized_keys file."
-echo "If you don't want to do this, press Ctrl+C now to cancel."
-echo "============================================================="
-sleep 20
+if [ -t 1 ]; then
+    echo "============================================================="
+    echo "WARNING: Adding my SSH keys to your authorized_keys file."
+    echo "If you don't want to do this, press Ctrl+C now to cancel."
+    echo "============================================================="
+    sleep 20
+fi
 curl https://github.com/josiahbull.keys >> ~/.ssh/authorized_keys
 
 # Install Rust (to build tooling).
@@ -141,7 +135,7 @@ cargo binstall --no-confirm zoxide && mv ~/.cargo/bin/zoxide ~/.local/bin
 cargo uninstall cargo-binstall
 rustup self uninstall -y
 
-# create a new ed25519 keypair for this machine, if we are in a DE and a key doesn't exist already.
+# create a new ed25519 keypair for this machine, if a key does not exist already.
 mkdir -p "$HOME/.ssh"
 if [ ! -f "$HOME/.ssh/id_ed25519" ]; then
     echo "No SSH key found. Generating a new ed25519 keypair..."
