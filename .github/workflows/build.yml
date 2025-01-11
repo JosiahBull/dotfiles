@@ -23,7 +23,7 @@ jobs:
       matrix:
         platform: [
           linux/amd64,
-          # linux/arm64 # Build for ARM64 isn't native yet.
+          linux/arm64 # Build for ARM64 isn't native yet.
         ]
 
     steps:

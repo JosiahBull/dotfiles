@@ -36,7 +36,7 @@ then
 
     # Install python utils.
     echo ">>> Installing python utils"
-    sudo dnf install -y python3-pip python3-venv
+    sudo dnf install -y python3-pip
 
     # Install other applications.
     echo ">>> Installing other applications"
