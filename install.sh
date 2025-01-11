@@ -9,6 +9,5 @@ tmpdir=$(mktemp -d)
 git clone https://github.com/JosiahBull/dotfiles "$tmpdir"
 pushd "$tmpdir"
 git submodule update --init --recursive --depth 2
-popd
-
 ./configure.sh "$tmpdir"
+popd
