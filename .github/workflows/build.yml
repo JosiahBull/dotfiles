@@ -79,10 +79,3 @@ jobs:
         run: |
           DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' ${{ steps.imageName.outputs.IMAGE_NAME }} | cut -d '@' -f 2)
           echo "::set-output name=digest::${DIGEST}"
-
-      - name: Generate artifact attestation
-        uses: actions/attest-build-provenance@v2
-        with:
-          subject-name: ${{ steps.imageName.outputs.IMAGE_NAME_NO_TAG }}
-          subject-digest: ${{ steps.digest.outputs.digest }}
-          push-to-registry: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
