@@ -31,7 +31,6 @@ plugins=(
     sudo
     rsync
     zsh-syntax-highlighting
-    zsh-autosuggestions
 )
 
 source "$ZSH/oh-my-zsh.sh"
@@ -48,3 +47,6 @@ eval "$(thefuck --alias)"
 
 GPG_TTY="$(tty)"
 export GPG_TTY
+
+# Ensure all zsh completions are loaded from ~/.zsh/completions
+fpath+=("$HOME/.zsh/completions")

@@ -63,6 +63,10 @@ else
     exit 1
 fi
 
+# Ensure directories exist for fish and zsh completions
+mkdir -p "$HOME/.config/fish/completions"
+mkdir -p "$HOME/.zsh/completions"
+
 # install python modules
 # I mostly only use `thefuck` for creating new git branches... eventually I'll replace it with a handful of shell scripts. :P
 python3 -m venv ~/.local --system-site-packages
@@ -117,16 +121,38 @@ curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-
 # Then, install the rest of the programs - ideally using a binary but we will fallback to building.
 # XXX: Eventually we want to enable sign checking on packages here...
 cargo binstall --no-confirm bat && mv ~/.cargo/bin/bat ~/.local/bin
+~/.local/bin/bat --completion zsh > ~/.zsh/completions/_bat
+~/.local/bin/bat --completion fish > ~/.config/fish/completions/bat.fish
+
 cargo binstall --no-confirm cargo-autoinherit && mv ~/.cargo/bin/cargo-autoinherit ~/.local/bin
+# XXX: create manual completions for autoinherit
+
 cargo binstall --no-confirm cargo-expand && mv ~/.cargo/bin/cargo-expand ~/.local/bin
+# XXX: create manual completions for cargo-expand
+
 cargo binstall --no-confirm cargo-semver-checks && mv ~/.cargo/bin/cargo-semver-checks ~/.local/bin
+# XXX: create manual completions for cargo-semver-checks
+
 cargo binstall --no-confirm cargo-tarpaulin && mv ~/.cargo/bin/cargo-tarpaulin ~/.local/bin
+# XXX: create manual completions for cargo-tarpaulin
+
 cargo binstall --no-confirm cargo-udeps && mv ~/.cargo/bin/cargo-udeps ~/.local/bin
+# XXX: create manual completions for cargo-udeps
+
 cargo binstall --no-confirm cargo-workspaces && mv ~/.cargo/bin/cargo-workspaces ~/.local/bin
-cargo binstall --no-confirm license-generator && mv ~/.cargo/bin/license-generator ~/.local/bin
+# XXX: create manual completions for cargo-workspaces
+
 cargo binstall --no-confirm ripgrep && mv ~/.cargo/bin/rg ~/.local/bin
+~/.local/bin/rg --generate=complete-zsh > ~/.zsh/completions/_rg
+~/.local/bin/rg --generate=complete-fish > ~/.config/fish/completions/rg.fish
+
 cargo binstall --no-confirm tokei && mv ~/.cargo/bin/tokei ~/.local/bin
-cargo binstall --no-confirm zoxide && mv ~/.cargo/bin/zoxide ~/.local/bin
+# XXX: create manual completions for tokei
+
+cargo binstall --no-confirm cargo-mutants && mv ~/.cargo/bin/cargo-mutants ~/.local/bin
+~/.local/bin/cargo-mutants mutants --completions zsh > ~/.zsh/completions/_mutants
+~/.local/bin/cargo-mutants mutants --completions fish > ~/.config/fish/completions/mutants.fish
+
 # XXX: Some of these should be installed with a wrapper script at first invocation/checks for updates
 # after that... but that's a problem for future me.
 
