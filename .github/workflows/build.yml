@@ -23,7 +23,7 @@ jobs:
 
     timeout-minutes: 60
     concurrency:
-      group: ${{ github.workflow }}-${{ github.ref }}
+      group: ${{ github.workflow }}-build-arm64-${{ github.ref }}
       cancel-in-progress: true
 
     steps:
@@ -54,7 +54,7 @@ jobs:
 
     timeout-minutes: 60
     concurrency:
-      group: ${{ github.workflow }}-${{ github.ref }}
+      group: ${{ github.workflow }}-build-amd64-${{ github.ref }}
       cancel-in-progress: true
 
     steps:
