@@ -1,6 +1,6 @@
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
+    rev: v4.6.0
     hooks:
       - id: check-yaml
         exclude: ^(\./\.scripts/|\./zsh/ohmyzsh/|\./zsh/powerlevel10k/|zsh/\.p10k\.zsh)
@@ -25,9 +25,6 @@ repos:
         args: [--autofix]
         exclude: ^(\./\.scripts/|\./zsh/ohmyzsh/|\./zsh/powerlevel10k/|zsh/\.p10k\.zsh)
 
-      - id: requirements-txt-fixer
-        exclude: ^(\./\.scripts/|\./zsh/ohmyzsh/|\./zsh/powerlevel10k/|zsh/\.p10k\.zsh)
-
       - id: check-case-conflict
         exclude: ^(\./\.scripts/|\./zsh/ohmyzsh/|\./zsh/powerlevel10k/|zsh/\.p10k\.zsh)
 
@@ -37,17 +34,6 @@ repos:
 
       - id: check-merge-conflict
 
-  - repo: https://github.com/psf/black
-    rev: 24.10.0
-    hooks:
-      - id: black
-        args: [--line-length=79]
-        exclude: ^(\./\.scripts/|\./zsh/ohmyzsh/|\./zsh/powerlevel10k/|zsh/\.p10k\.zsh)
-  - repo: https://github.com/PyCQA/flake8
-    rev: 7.1.1
-    hooks:
-      - id: flake8
-        exclude: ^(\./\.scripts/|\./zsh/ohmyzsh/|\./zsh/powerlevel10k/|zsh/\.p10k\.zsh)
   - repo: https://github.com/koalaman/shellcheck-precommit
     rev: v0.10.0
     hooks:

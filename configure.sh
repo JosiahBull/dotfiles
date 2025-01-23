@@ -153,6 +153,10 @@ cargo binstall --no-confirm cargo-mutants && mv ~/.cargo/bin/cargo-mutants ~/.lo
 ~/.local/bin/cargo-mutants mutants --completions zsh > ~/.zsh/completions/_mutants
 ~/.local/bin/cargo-mutants mutants --completions fish > ~/.config/fish/completions/mutants.fish
 
+cargo binstall --no-confirm just && mv ~/.cargo/bin/just ~/.local/bin
+~/.local/bin/just --completions zsh > ~/.zsh/completions/_just
+~/.local/bin/just --completions fish > ~/.config/fish/completions/just.fish
+
 # XXX: Some of these should be installed with a wrapper script at first invocation/checks for updates
 # after that... but that's a problem for future me.
 
