@@ -23,8 +23,8 @@ docker-build platform=(arch()):
     docker buildx create --use
     docker buildx build \
         --platform "linux/{{platform}}" \
-        -t "{{repo}}:$sha-{{platform}}" \
-        -t "{{repo}}:latest-{{platform}}" \
+        -t "{{repo}}:{{platform}}-$sha" \
+        -t "{{repo}}:{{platform}}-latest" \
         --load \
         .
 
@@ -38,31 +38,31 @@ docker-push platform=(arch()):
     echo "Docker buildx version: $(docker buildx version)"
     echo "Git SHA: $sha"
 
-    docker push "{{repo}}:$sha-{{platform}}"
-    docker push "{{repo}}:latest-{{platform}}"
+    docker push "{{repo}}:{{platform}}-$sha"
+    docker push "{{repo}}:{{platform}}-latest"
 
-docker-manifest triples=(arch()):
+docker-manifest platforms=(arch()):
     #!/bin/bash
 
     set -o errexit -o nounset -o pipefail
 
     # Pull the images
     echo "Pulling images"
-    for triple in {{triples}}; do
-        echo "Pulling {{repo}}:$triple-$(git rev-parse --short HEAD)"
-        docker pull {{repo}}:$triple-$(git rev-parse --short HEAD);
-        docker pull {{repo}}:$triple-latest;
+    for platform in {{platforms}}; do
+        echo "Pulling {{repo}}:$platform-$(git rev-parse --short HEAD)"
+        docker pull {{repo}}:$platform-$(git rev-parse --short HEAD);
+        docker pull {{repo}}:$platform-latest;
     done
 
     # Create the manifest for sha
     echo "Creating manifest for {{repo}}:$(git rev-parse --short HEAD)"
     docker manifest create {{repo}}:$(git rev-parse --short HEAD) \
-        $(for triple in {{triples}}; do echo -n "--amend {{repo}}:$triple-$(git rev-parse --short HEAD) "; done)
+        $(for platform in {{platforms}}; do echo -n "--amend {{repo}}:$platform-$(git rev-parse --short HEAD) "; done)
 
     # Create the manifest for latest
     echo "Creating manifest for latest"
     docker manifest create {{repo}}:latest \
-        $(for triple in {{triples}}; do echo -n "--amend {{repo}}:$triple-latest "; done)
+        $(for platform in {{platforms}}; do echo -n "--amend {{repo}}:$platform-latest "; done)
 
 docker-manifest-push:
     #!/bin/bash

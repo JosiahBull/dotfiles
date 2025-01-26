@@ -76,17 +76,33 @@ jobs:
         run: |
           just docker-push x86_64
 
-  create:
+  create_manifest:
     needs: [build_arm64, build_amd64]
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
     runs-on: ubuntu-latest
+
+    timeout-minutes: 10
+    concurrency:
+      group: ${{ github.workflow }}-manifest-${{ github.ref }}
+      cancel-in-progress: true
 
     steps:
       - uses: actions/checkout@v4
       - uses: taiki-e/install-action@just
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && !env.ACT
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
       - name: Create the Manifest
         run: |
           just docker-manifest "aarch64 x86_64"
       - name: Push the Manifest
         if: github.event_name == 'push' && github.ref == 'refs/heads/main' && !env.ACT
         run: |
-          just docker-push-manifest
+          just docker-manifest-push
