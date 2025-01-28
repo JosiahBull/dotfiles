@@ -69,8 +69,7 @@ mkdir -p "$HOME/.zsh/completions"
 
 # install python modules
 # I mostly only use `thefuck` for creating new git branches... eventually I'll replace it with a handful of shell scripts. :P
-python3 -m venv ~/.local --system-site-packages
-~/.local/bin/pip install thefuck pre-commit
+pip install thefuck pre-commit
 
 # Move into the temporary directory.
 pushd "$tmpdir"
