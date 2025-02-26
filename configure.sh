@@ -69,7 +69,7 @@ mkdir -p "$HOME/.zsh/completions"
 
 # install python modules
 # I mostly only use `thefuck` for creating new git branches... eventually I'll replace it with a handful of shell scripts. :P
-pip install thefuck pre-commit
+pip install --break-system-packages thefuck pre-commit
 
 # Move into the temporary directory.
 pushd "$tmpdir"
@@ -119,6 +119,7 @@ curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-
 
 # Then, install the rest of the programs - ideally using a binary but we will fallback to building.
 # XXX: Eventually we want to enable sign checking on packages here...
+mkdir -p ~/.local/bin
 cargo binstall --no-confirm bat && mv ~/.cargo/bin/bat ~/.local/bin
 ~/.local/bin/bat --completion zsh > ~/.zsh/completions/_bat
 ~/.local/bin/bat --completion fish > ~/.config/fish/completions/bat.fish
