@@ -2,13 +2,17 @@ repo := 'ghcr.io/josiahbull/dotfiles'
 
 # Install pre-commit
 install:
-    # Upgrade pip if necessary
-    @pip install --upgrade pip
-    @pip install pre-commit
+    #!/usr/bin/env bash
+    python3 -m venv venv
+    source venv/bin/activate
+    pip install --upgrade pip
+    pip install pre-commit
 
 # Run pre-commit on all files
 pre-commit:
-    @pre-commit run --all-files
+    #!/usr/bin/env bash
+    source venv/bin/activate
+    pre-commit run --all-files
 
 # Build the Docker image, with the platform provided as an argument.
 docker-build platform=(arch()):

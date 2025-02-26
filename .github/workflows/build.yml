@@ -21,7 +21,7 @@ jobs:
       id-token: write
     runs-on: ubuntu-latest
 
-    timeout-minutes: 60
+    timeout-minutes: 180 # arm takes significantly longer with emulation
     concurrency:
       group: ${{ github.workflow }}-build-arm64-${{ github.ref }}
       cancel-in-progress: true
