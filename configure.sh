@@ -163,9 +163,6 @@ cargo binstall --no-confirm cargo-deny && mv ~/.cargo/bin/cargo-deny ~/.local/bi
 cargo binstall --no-confirm cargo-insta && mv ~/.cargo/bin/cargo-insta ~/.local/bin
 # XXX: create manual completions for cargo-insta
 
-cargo binstall --no-confirm cargo-semver-checks && mv ~/.cargo/bin/cargo-semver-checks ~/.local/bin
-# XXX: create manual completions for cargo-semver-checks
-
 cargo binstall --no-confirm cargo-release && mv ~/.cargo/bin/cargo-release ~/.local/bin
 # XXX: create manual completions for cargo-release
 

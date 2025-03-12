@@ -23,7 +23,7 @@ repos:
 
       - id: pretty-format-json
         args: [--autofix]
-        exclude: ^(\./\.scripts/|\./zsh/ohmyzsh/|\./zsh/powerlevel10k/|zsh/\.p10k\.zsh)
+        exclude: ^(\./\.scripts/|\./zsh/ohmyzsh/|\./\.devcontainer/devcontainer.json|\./zsh/powerlevel10k/|zsh/\.p10k\.zsh)
 
       - id: check-case-conflict
         exclude: ^(\./\.scripts/|\./zsh/ohmyzsh/|\./zsh/powerlevel10k/|zsh/\.p10k\.zsh)
