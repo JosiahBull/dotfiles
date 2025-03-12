@@ -31,6 +31,8 @@ RUN apt-get update && apt-get install -y python3.11 python3.11-dev python3.11-di
 RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1
 # END HACK
 
+RUN pip3 install pre-commit thefuck
+
 # Set the shell to zsh
 RUN chsh -s /bin/zsh
 ENTRYPOINT ["/bin/zsh"]

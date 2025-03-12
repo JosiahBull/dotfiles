@@ -6,5 +6,11 @@
 	program = gpg2
 [help]
 	autocorrect = 5
+[alias]
+	stash = stash --all
+[safe]
+	directory = /workspace/*
 [pull]
 	rebase = true
+[core]
+	editor = vim

@@ -40,7 +40,7 @@ then
 
     # Install other applications.
     echo ">>> Installing other applications"
-    sudo dnf install -y zsh tmux curl git gpg tar
+    sudo dnf install -y zsh tmux curl git gpg tar nano
 
     echo ">>> dnf complete"
 # check if apt-get command exists
@@ -55,7 +55,7 @@ then
 
     # Install other applications.
     echo ">>> Installing other utils"
-    sudo apt-get install -y zsh tmux curl git gpg tar
+    sudo apt-get install -y zsh tmux curl git gpg tar nano
 
     echo "apt-get complete"
 else
@@ -156,6 +156,18 @@ cargo binstall --no-confirm cargo-mutants && mv ~/.cargo/bin/cargo-mutants ~/.lo
 cargo binstall --no-confirm just && mv ~/.cargo/bin/just ~/.local/bin
 ~/.local/bin/just --completions zsh > ~/.zsh/completions/_just
 ~/.local/bin/just --completions fish > ~/.config/fish/completions/just.fish
+
+cargo binstall --no-confirm cargo-deny && mv ~/.cargo/bin/cargo-deny ~/.local/bin
+# XXX: create manual completions for cargo-deny
+
+cargo binstall --no-confirm cargo-insta && mv ~/.cargo/bin/cargo-insta ~/.local/bin
+# XXX: create manual completions for cargo-insta
+
+cargo binstall --no-confirm cargo-semver-checks && mv ~/.cargo/bin/cargo-semver-checks ~/.local/bin
+# XXX: create manual completions for cargo-semver-checks
+
+cargo binstall --no-confirm cargo-release && mv ~/.cargo/bin/cargo-release ~/.local/bin
+# XXX: create manual completions for cargo-release
 
 # XXX: Some of these should be installed with a wrapper script at first invocation/checks for updates
 # after that... but that's a problem for future me.

@@ -1,4 +1,5 @@
 # shellcheck disable=SC1090,SC2034,SC1091,SC2148,SC2296,SC2296
+export fpath=("/home/$USER/.zsh/completions" $fpath)
 
 alias nzrc="nano ~/.zshrc"
 alias szrc="source ~/.zshrc"
@@ -50,3 +51,5 @@ export GPG_TTY
 
 # Ensure all zsh completions are loaded from ~/.zsh/completions
 fpath+=("$HOME/.zsh/completions")
+
+. "$HOME/.cargo/env"
