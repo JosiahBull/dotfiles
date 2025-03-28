@@ -7,10 +7,11 @@
 [help]
 	autocorrect = 5
 [alias]
-	stash = stash --all
+	stash = stash save --include-untracked
 [safe]
 	directory = /workspace/*
-[pull]
-	rebase = true
+[push]
+	default = current
+	autoSetupRemote = always
 [core]
 	editor = vim
