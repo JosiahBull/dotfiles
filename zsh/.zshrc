@@ -32,6 +32,7 @@ plugins=(
     sudo
     rsync
     zsh-syntax-highlighting
+    zsh
 )
 
 source "$ZSH/oh-my-zsh.sh"
