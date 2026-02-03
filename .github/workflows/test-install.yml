@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       os:
-        description: 'OS to test on'
+        description: "OS to test on"
         required: false
-        default: 'all'
+        default: "all"
         type: choice
         options:
           - all
@@ -16,9 +16,16 @@ on:
     branches:
       - main
     paths:
-      - 'install.sh'
-      - 'configure.sh'
-      - '.github/workflows/test-install.yml'
+      - "install.sh"
+      - "configure.sh"
+      - ".github/workflows/test-install.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "install.sh"
+      - "configure.sh"
+      - ".github/workflows/test-install.yml"
 
 env:
   # Skip interactive prompts

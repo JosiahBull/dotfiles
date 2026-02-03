@@ -51,15 +51,15 @@ ensure_dir() {
 # ==============================================================================
 
 collect_user_info() {
-    # Skip in CI - use env variables or defaults
-    if [ -n "$CI" ]; then
+    # Skip in CI or non-interactive mode - use env variables or defaults
+    if [ -n "$CI" ] || [ ! -t 0 ]; then
         if [ -z "$USER_NAME" ]; then
             USER_NAME="CI User"
         fi
         if [ -z "$USER_EMAIL" ]; then
             USER_EMAIL="ci@localhost"
         fi
-        log "Using CI defaults: $USER_NAME <$USER_EMAIL>"
+        log "Using defaults (non-interactive): $USER_NAME <$USER_EMAIL>"
         return
     fi
 
@@ -74,7 +74,7 @@ collect_user_info() {
 
     # Collect name
     if [ -z "$USER_NAME" ]; then
-        read -p "Full name (for git commits): " USER_NAME
+        read -rp "Full name (for git commits): " USER_NAME
         if [ -z "$USER_NAME" ]; then
             error "Name is required."
         fi
@@ -84,7 +84,7 @@ collect_user_info() {
 
     # Collect email
     if [ -z "$USER_EMAIL" ]; then
-        read -p "Email address (for git commits): " USER_EMAIL
+        read -rp "Email address (for git commits): " USER_EMAIL
         if [ -z "$USER_EMAIL" ]; then
             error "Email is required."
         fi
