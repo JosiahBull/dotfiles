@@ -474,9 +474,11 @@ setup_ssh_key_sync() {
     CRON_JOB="0 */6 * * * $LOCAL_BIN/sync-ssh-keys >> $HOME_DIR/.local/log/ssh-key-sync.log 2>&1"
     CRON_MARKER="# dotfiles-ssh-key-sync"
 
-    # Skip cron setup in CI (no crontab available)
+    # Skip cron setup in CI or if crontab not available
     if [ -n "$CI" ]; then
         log "Skipping cron setup (CI environment detected)."
+    elif ! command -v crontab &> /dev/null; then
+        log "Skipping cron setup (crontab not available)."
     elif crontab -l 2>/dev/null | grep -q "$CRON_MARKER"; then
         log "SSH key sync cron job already installed."
     else
