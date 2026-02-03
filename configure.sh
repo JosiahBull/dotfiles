@@ -302,9 +302,9 @@ setup_gpg() {
     # Set correct permissions on gnupg directory
     chmod 600 "$HOME_DIR/.gnupg/"* 2>/dev/null || true
 
-    # Skip interactive GPG key setup in CI
-    if [ -n "$CI" ]; then
-        log "Skipping GPG key generation in CI environment."
+    # Skip interactive GPG key setup in CI or non-interactive mode
+    if [ -n "$CI" ] || [ ! -t 0 ]; then
+        log "Skipping GPG key generation (non-interactive mode)."
         return
     fi
 
@@ -552,12 +552,12 @@ main() {
     setup_ssh_git
     setup_rust
 
-    # Change Shell (skip in CI - requires PAM authentication)
-    if [ -z "$CI" ] && [ "$SHELL" != "$(which zsh)" ]; then
+    # Change Shell (skip in CI/non-interactive - requires PAM authentication)
+    if [ -z "$CI" ] && [ -t 0 ] && [ "$SHELL" != "$(which zsh)" ]; then
         log "Changing shell to zsh..."
         chsh -s "$(which zsh)"
-    elif [ -n "$CI" ]; then
-        log "Skipping shell change in CI environment."
+    elif [ -n "$CI" ] || [ ! -t 0 ]; then
+        log "Skipping shell change (non-interactive mode)."
     fi
 
     log "Installation Complete! Please restart your terminal."
