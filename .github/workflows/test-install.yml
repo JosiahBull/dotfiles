@@ -12,6 +12,9 @@ on:
           - all
           - ubuntu-22.04
           - ubuntu-24.04
+          - macos-14
+          - macos-15
+          - rocky-9
   pull_request:
     branches:
       - main
@@ -33,6 +36,7 @@ env:
 
 jobs:
   test-ubuntu:
+    if: github.event_name != 'workflow_dispatch' || github.event.inputs.os == 'all' || startsWith(github.event.inputs.os, 'ubuntu')
     strategy:
       fail-fast: false
       matrix:
@@ -100,8 +104,75 @@ jobs:
 
           echo "=== All verifications passed ==="
 
+  test-macos:
+    if: github.event_name != 'workflow_dispatch' || github.event.inputs.os == 'all' || startsWith(github.event.inputs.os, 'macos')
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.os != 'all' && fromJson(format('["{0}"]', github.event.inputs.os)) || fromJson('["macos-14", "macos-15"]') }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Run configure.sh
+        run: |
+          # Run the configure script with output logging
+          ./configure.sh 2>&1 | tee install.log
+        env:
+          CI: true
+          SHELL: /bin/bash
+
+      - name: Upload install log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: install-log-${{ matrix.os }}
+          path: install.log
+          retention-days: 7
+
+      - name: Verify installation
+        run: |
+          echo "=== Verifying installed tools ==="
+
+          echo "Checking zsh config..."
+          test -f "$HOME/.zshrc" && echo "✓ .zshrc exists"
+          test -f "$HOME/.zsh_aliases" && echo "✓ .zsh_aliases exists"
+          test -f "$HOME/.p10k.zsh" && echo "✓ .p10k.zsh exists"
+
+          echo "Checking oh-my-zsh..."
+          test -d "$HOME/.oh-my-zsh" && echo "✓ oh-my-zsh installed"
+
+          echo "Checking Node.js..."
+          export NVM_DIR="$HOME/.nvm"
+          [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+          node --version && echo "✓ Node.js installed"
+          pnpm --version && echo "✓ pnpm installed"
+
+          echo "Checking Python tools..."
+          which pre-commit && echo "✓ pre-commit installed"
+
+          echo "Checking Rust tools in ~/.local/bin..."
+          test -f "$HOME/.local/bin/bat" && echo "✓ bat installed"
+          test -f "$HOME/.local/bin/rg" && echo "✓ ripgrep installed"
+          test -f "$HOME/.local/bin/just" && echo "✓ just installed"
+          test -f "$HOME/.local/bin/tokei" && echo "✓ tokei installed"
+
+          echo "Checking SSH setup..."
+          test -f "$HOME/.ssh/id_ed25519" && echo "✓ SSH key generated"
+          test -f "$HOME/.gitconfig" && echo "✓ .gitconfig exists"
+
+          echo "Checking macOS-specific setup..."
+          test -f "$HOME/.gnupg/gpg-agent.conf" && echo "✓ GPG agent configured"
+
+          echo "=== All verifications passed ==="
+
   test-rocky:
-    if: github.event_name == 'workflow_dispatch' || github.event_name == 'pull_request'
+    if: github.event_name != 'workflow_dispatch' || github.event.inputs.os == 'all' || github.event.inputs.os == 'rocky-9'
     runs-on: ubuntu-latest
     container:
       image: rockylinux:9
