@@ -3,7 +3,7 @@
 [init]
 	defaultBranch = main
 [gpg]
-	program = gpg2
+	program = gpg
 [help]
 	autocorrect = 5
 [alias]

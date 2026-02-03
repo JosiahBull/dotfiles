@@ -65,7 +65,7 @@ install_sys_packages() {
         brew update && brew upgrade
 
         # Install Python, Pipx, and Utils
-        brew install python pipx zsh tmux curl git gnupg nano
+        brew install python pipx zsh tmux curl git gnupg pinentry-mac nano
 
         # Add pipx to path immediately for this session
         export PATH="$PATH:$HOME_DIR/Library/Python/3.9/bin"
@@ -220,6 +220,35 @@ setup_dotfiles() {
 }
 
 # ==============================================================================
+# GPG SETUP
+# ==============================================================================
+
+setup_gpg() {
+    log "Configuring GPG..."
+    ensure_dir "$HOME_DIR/.gnupg"
+    chmod 700 "$HOME_DIR/.gnupg"
+
+    if [ "$OS" = "Mac" ]; then
+        log "Setting up GPG for macOS with pinentry-mac..."
+
+        # Configure gpg-agent to use pinentry-mac
+        PINENTRY_PATH="$(which pinentry-mac)"
+        if [ -n "$PINENTRY_PATH" ]; then
+            echo "pinentry-program $PINENTRY_PATH" > "$HOME_DIR/.gnupg/gpg-agent.conf"
+            log "Configured pinentry-mac at: $PINENTRY_PATH"
+        else
+            warn "pinentry-mac not found. GPG signing may not work correctly."
+        fi
+
+        # Restart gpg-agent to pick up new config
+        killall gpg-agent 2>/dev/null || true
+    fi
+
+    # Set correct permissions on gnupg directory
+    chmod 600 "$HOME_DIR/.gnupg/"* 2>/dev/null || true
+}
+
+# ==============================================================================
 # SSH & GIT
 # ==============================================================================
 
@@ -227,9 +256,18 @@ setup_ssh_git() {
     log "Configuring SSH and Git..."
     ensure_dir "$HOME_DIR/.ssh"
 
-    # Config files
+    # Copy base gitconfig
     if [ -f "$SCRIPT_DIR/.gitconfig" ]; then
         cp "$SCRIPT_DIR/.gitconfig" "$HOME_DIR/.gitconfig"
+    fi
+
+    # Set GPG program path based on OS
+    if [ "$OS" = "Mac" ]; then
+        GPG_PATH="$(which gpg)"
+        if [ -n "$GPG_PATH" ]; then
+            git config --global gpg.program "$GPG_PATH"
+            log "Set gpg.program to: $GPG_PATH"
+        fi
     fi
     if [ -f "$SCRIPT_DIR/ssh_config" ]; then
         cp "$SCRIPT_DIR/ssh_config" "$HOME_DIR/.ssh/config"
@@ -366,6 +404,7 @@ main() {
     install_python_tools
     setup_node
     setup_dotfiles
+    setup_gpg
     setup_ssh_git
     setup_rust
 
