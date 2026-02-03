@@ -10,7 +10,8 @@ RUN echo "Acquire::http::Pipeline-Depth 0;" > /etc/apt/apt.conf.d/99custom && \
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=Pacific/Auckland
-RUN apt-get update && apt-get install -y curl tzdata sudo git software-properties-common zsh && \
+RUN apt-get update && apt-get install -y curl tzdata sudo git software-properties-common zsh \
+    pkg-config libssl-dev && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Install dotfiles.
