@@ -76,5 +76,10 @@ docker-manifest-push:
     docker manifest push "{{repo}}:$(git rev-parse --short HEAD)"
     docker manifest push "{{repo}}:latest"
 
+# Update all git submodules to their latest versions
+update-submodules:
+    git submodule update --init --recursive
+    git submodule foreach 'git fetch origin && git checkout $(git remote show origin | grep "HEAD branch" | sed "s/.*: //") && git pull'
+
 default:
     @just --list
