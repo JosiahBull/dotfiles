@@ -71,6 +71,60 @@ jobs:
       - name: Build image
         run: |
           just docker-build x86_64
+      - name: Smoke test - container starts
+        run: |
+          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:x86_64-$(git rev-parse --short HEAD)"
+          echo "Testing image: $IMAGE"
+          docker run --rm "$IMAGE" -c "echo '✓ Container started successfully'"
+      - name: Smoke test - shell environment
+        run: |
+          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:x86_64-$(git rev-parse --short HEAD)"
+          docker run --rm "$IMAGE" -c '
+            set -e
+            echo "=== Shell Environment ==="
+            test -f ~/.zshrc && echo "✓ .zshrc exists"
+            test -f ~/.p10k.zsh && echo "✓ .p10k.zsh exists"
+            test -d ~/.oh-my-zsh && echo "✓ oh-my-zsh installed"
+          '
+      - name: Smoke test - Node.js
+        run: |
+          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:x86_64-$(git rev-parse --short HEAD)"
+          docker run --rm "$IMAGE" -c '
+            set -e
+            echo "=== Node.js ==="
+            export NVM_DIR="$HOME/.nvm"
+            [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+            node --version && echo "✓ Node.js works"
+            pnpm --version && echo "✓ pnpm works"
+          '
+      - name: Smoke test - Rust tools
+        run: |
+          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:x86_64-$(git rev-parse --short HEAD)"
+          docker run --rm "$IMAGE" -c '
+            set -e
+            echo "=== Rust Tools ==="
+            ~/.local/bin/bat --version && echo "✓ bat works"
+            ~/.local/bin/rg --version && echo "✓ ripgrep works"
+            ~/.local/bin/just --version && echo "✓ just works"
+            ~/.local/bin/tokei --version && echo "✓ tokei works"
+          '
+      - name: Smoke test - Python tools
+        run: |
+          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:x86_64-$(git rev-parse --short HEAD)"
+          docker run --rm "$IMAGE" -c '
+            set -e
+            echo "=== Python Tools ==="
+            ~/.local/bin/pre-commit --version && echo "✓ pre-commit works"
+          '
+      - name: Smoke test - git config
+        run: |
+          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:x86_64-$(git rev-parse --short HEAD)"
+          docker run --rm "$IMAGE" -c '
+            set -e
+            echo "=== Git ==="
+            test -f ~/.gitconfig && echo "✓ .gitconfig exists"
+            git --version && echo "✓ git works"
+          '
       - name: Push Docker image
         if: github.event_name == 'push' && github.ref == 'refs/heads/main' && !env.ACT
         run: |
