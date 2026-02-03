@@ -1,0 +1,159 @@
+name: Test Install Script
+
+on:
+  workflow_dispatch:
+    inputs:
+      os:
+        description: 'OS to test on'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - ubuntu-22.04
+          - ubuntu-24.04
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'install.sh'
+      - 'configure.sh'
+      - '.github/workflows/test-install.yml'
+
+env:
+  # Skip interactive prompts
+  DEBIAN_FRONTEND: noninteractive
+
+jobs:
+  test-ubuntu:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.os != 'all' && fromJson(format('["{0}"]', github.event.inputs.os)) || fromJson('["ubuntu-22.04", "ubuntu-24.04"]') }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y expect
+
+      - name: Run configure.sh
+        run: |
+          # Run the configure script with output logging
+          ./configure.sh 2>&1 | tee install.log
+        env:
+          CI: true
+          SHELL: /bin/bash
+
+      - name: Upload install log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: install-log-${{ matrix.os }}
+          path: install.log
+          retention-days: 7
+
+      - name: Verify installation
+        run: |
+          echo "=== Verifying installed tools ==="
+
+          echo "Checking zsh config..."
+          test -f "$HOME/.zshrc" && echo "✓ .zshrc exists"
+          test -f "$HOME/.zsh_aliases" && echo "✓ .zsh_aliases exists"
+          test -f "$HOME/.p10k.zsh" && echo "✓ .p10k.zsh exists"
+
+          echo "Checking oh-my-zsh..."
+          test -d "$HOME/.oh-my-zsh" && echo "✓ oh-my-zsh installed"
+
+          echo "Checking Node.js..."
+          export NVM_DIR="$HOME/.nvm"
+          [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+          node --version && echo "✓ Node.js installed"
+          pnpm --version && echo "✓ pnpm installed"
+
+          echo "Checking Python tools..."
+          which pre-commit && echo "✓ pre-commit installed"
+
+          echo "Checking Rust tools in ~/.local/bin..."
+          test -f "$HOME/.local/bin/bat" && echo "✓ bat installed"
+          test -f "$HOME/.local/bin/rg" && echo "✓ ripgrep installed"
+          test -f "$HOME/.local/bin/just" && echo "✓ just installed"
+          test -f "$HOME/.local/bin/tokei" && echo "✓ tokei installed"
+
+          echo "Checking SSH setup..."
+          test -f "$HOME/.ssh/id_ed25519" && echo "✓ SSH key generated"
+          test -f "$HOME/.gitconfig" && echo "✓ .gitconfig exists"
+
+          echo "=== All verifications passed ==="
+
+  test-rocky:
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    container:
+      image: rockylinux:9
+    timeout-minutes: 30
+
+    steps:
+      - name: Install git
+        run: |
+          dnf install -y git
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Create test user
+        run: |
+          # Create a non-root user for testing (configure.sh expects $HOME)
+          useradd -m testuser
+          chown -R testuser:testuser .
+
+      - name: Run configure.sh as testuser
+        run: |
+          # Run as testuser with sudo available
+          dnf install -y sudo
+          echo "testuser ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+
+          su - testuser -c "cd $GITHUB_WORKSPACE && ./configure.sh 2>&1 | tee /home/testuser/install.log"
+          cp /home/testuser/install.log ./install.log
+        env:
+          CI: true
+
+      - name: Upload install log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: install-log-rocky9
+          path: install.log
+          retention-days: 7
+
+      - name: Verify installation
+        run: |
+          su - testuser -c '
+            echo "=== Verifying installed tools ==="
+
+            echo "Checking zsh config..."
+            test -f "$HOME/.zshrc" && echo "✓ .zshrc exists"
+
+            echo "Checking oh-my-zsh..."
+            test -d "$HOME/.oh-my-zsh" && echo "✓ oh-my-zsh installed"
+
+            echo "Checking Node.js..."
+            export NVM_DIR="$HOME/.nvm"
+            [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+            node --version && echo "✓ Node.js installed"
+
+            echo "Checking Rust tools..."
+            test -f "$HOME/.local/bin/bat" && echo "✓ bat installed"
+            test -f "$HOME/.local/bin/rg" && echo "✓ ripgrep installed"
+
+            echo "=== Verifications complete ==="
+          '

@@ -144,9 +144,10 @@ setup_node() {
     log "Installing global npm packages: pnpm..."
     npm install -g pnpm
 
-    # 5. Install Claude Code
-    # On Mac, use brew cask. On Linux, fallback to npm.
-    if [ "$OS" = "Mac" ]; then
+    # 5. Install Claude Code (skip in CI - external dependency)
+    if [ -n "$CI" ]; then
+        log "Skipping Claude Code installation in CI environment."
+    elif [ "$OS" = "Mac" ]; then
         log "Installing Claude Code via Homebrew Cask..."
         brew install --cask claude-code
     else
@@ -363,10 +364,12 @@ main() {
     setup_ssh_git
     setup_rust
 
-    # Change Shell
-    if [ "$SHELL" != "$(which zsh)" ]; then
+    # Change Shell (skip in CI - requires PAM authentication)
+    if [ -z "$CI" ] && [ "$SHELL" != "$(which zsh)" ]; then
         log "Changing shell to zsh..."
         chsh -s "$(which zsh)"
+    elif [ -n "$CI" ]; then
+        log "Skipping shell change in CI environment."
     fi
 
     log "Installation Complete! Please restart your terminal."
