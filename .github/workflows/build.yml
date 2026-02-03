@@ -73,12 +73,12 @@ jobs:
           just docker-build x86_64
       - name: Smoke test - container starts
         run: |
-          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:x86_64-$(git rev-parse --short HEAD)"
+          IMAGE="${{ env.REGISTRY }}/$(echo '${{ env.IMAGE_NAME }}' | tr '[:upper:]' '[:lower:]'):x86_64-$(git rev-parse --short HEAD)"
           echo "Testing image: $IMAGE"
           docker run --rm "$IMAGE" -c "echo '✓ Container started successfully'"
       - name: Smoke test - shell environment
         run: |
-          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:x86_64-$(git rev-parse --short HEAD)"
+          IMAGE="${{ env.REGISTRY }}/$(echo '${{ env.IMAGE_NAME }}' | tr '[:upper:]' '[:lower:]'):x86_64-$(git rev-parse --short HEAD)"
           docker run --rm "$IMAGE" -c '
             set -e
             echo "=== Shell Environment ==="
@@ -88,7 +88,7 @@ jobs:
           '
       - name: Smoke test - Node.js
         run: |
-          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:x86_64-$(git rev-parse --short HEAD)"
+          IMAGE="${{ env.REGISTRY }}/$(echo '${{ env.IMAGE_NAME }}' | tr '[:upper:]' '[:lower:]'):x86_64-$(git rev-parse --short HEAD)"
           docker run --rm "$IMAGE" -c '
             set -e
             echo "=== Node.js ==="
@@ -99,7 +99,7 @@ jobs:
           '
       - name: Smoke test - Rust tools
         run: |
-          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:x86_64-$(git rev-parse --short HEAD)"
+          IMAGE="${{ env.REGISTRY }}/$(echo '${{ env.IMAGE_NAME }}' | tr '[:upper:]' '[:lower:]'):x86_64-$(git rev-parse --short HEAD)"
           docker run --rm "$IMAGE" -c '
             set -e
             echo "=== Rust Tools ==="
@@ -110,7 +110,7 @@ jobs:
           '
       - name: Smoke test - Python tools
         run: |
-          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:x86_64-$(git rev-parse --short HEAD)"
+          IMAGE="${{ env.REGISTRY }}/$(echo '${{ env.IMAGE_NAME }}' | tr '[:upper:]' '[:lower:]'):x86_64-$(git rev-parse --short HEAD)"
           docker run --rm "$IMAGE" -c '
             set -e
             echo "=== Python Tools ==="
@@ -118,7 +118,7 @@ jobs:
           '
       - name: Smoke test - git config
         run: |
-          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:x86_64-$(git rev-parse --short HEAD)"
+          IMAGE="${{ env.REGISTRY }}/$(echo '${{ env.IMAGE_NAME }}' | tr '[:upper:]' '[:lower:]'):x86_64-$(git rev-parse --short HEAD)"
           docker run --rm "$IMAGE" -c '
             set -e
             echo "=== Git ==="
