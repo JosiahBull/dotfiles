@@ -25,7 +25,7 @@ RUN --mount=type=bind,source=.,target=/tmp/dotfiles,readonly \
     # Cleanup the apt lists (again).
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
-RUN pip3 install pre-commit thefuck
+# Note: pre-commit is already installed via pipx in configure.sh
 
 # Set the shell to zsh
 RUN chsh -s /bin/zsh
