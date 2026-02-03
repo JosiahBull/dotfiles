@@ -22,6 +22,8 @@
 	rom = !git fetch origin main:main && git rebase main
 [safe]
 	directory = /workspace/*
+	directory = ~/personal/*
+	directory = ~/work/*
 [push]
 	default = current
 	autoSetupRemote = always
