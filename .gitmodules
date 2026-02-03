@@ -1,6 +1,6 @@
-[submodule "zsh/ohmyzsh"]
-	path = zsh/ohmyzsh
+[submodule "ohmyzsh"]
+	path = ohmyzsh
 	url = https://github.com/ohmyzsh/ohmyzsh
-[submodule "zsh/powerlevel10k"]
-	path = zsh/powerlevel10k
+[submodule "powerlevel10k"]
+	path = powerlevel10k
 	url = https://github.com/romkatv/powerlevel10k.git

@@ -75,10 +75,9 @@ jobs:
         run: |
           echo "=== Verifying installed tools ==="
 
-          echo "Checking zsh config..."
+          echo "Checking zsh config (linked from dotfiles)..."
           test -f "$HOME/.zshrc" && echo "✓ .zshrc exists"
-          test -f "$HOME/.zsh_aliases" && echo "✓ .zsh_aliases exists"
-          test -f "$HOME/.p10k.zsh" && echo "✓ .p10k.zsh exists"
+          test -L "$HOME/.oh-my-zsh" && echo "✓ .oh-my-zsh is symlinked"
 
           echo "Checking oh-my-zsh..."
           test -d "$HOME/.oh-my-zsh" && echo "✓ oh-my-zsh installed"
@@ -152,10 +151,9 @@ jobs:
         run: |
           echo "=== Verifying installed tools ==="
 
-          echo "Checking zsh config..."
+          echo "Checking zsh config (linked from dotfiles)..."
           test -f "$HOME/.zshrc" && echo "✓ .zshrc exists"
-          test -f "$HOME/.zsh_aliases" && echo "✓ .zsh_aliases exists"
-          test -f "$HOME/.p10k.zsh" && echo "✓ .p10k.zsh exists"
+          test -L "$HOME/.oh-my-zsh" && echo "✓ .oh-my-zsh is symlinked"
 
           echo "Checking oh-my-zsh..."
           test -d "$HOME/.oh-my-zsh" && echo "✓ oh-my-zsh installed"

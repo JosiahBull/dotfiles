@@ -7,8 +7,9 @@ set -o errexit -o pipefail -o noclobber
 # CONFIGURATION & CONSTANTS
 # ==============================================================================
 
-# Script directory (Portable realpath)
+# Script directory (Portable realpath) - this is the dotfiles directory
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+DOTFILES_DIR="${DOTFILES_DIR:-$HOME/.dotfiles}"
 HOME_DIR="$HOME"
 LOCAL_BIN="$HOME_DIR/.local/bin"
 
@@ -44,6 +45,36 @@ ensure_dir() {
     if [ ! -d "$1" ]; then
         mkdir -p "$1"
     fi
+}
+
+# Create hardlink with symlink fallback (for files)
+link_file() {
+    local src="$1"
+    local dest="$2"
+
+    # Ensure parent directory exists
+    ensure_dir "$(dirname "$dest")"
+
+    # Remove existing file/link
+    rm -f "$dest"
+
+    # Try hardlink first, fall back to symlink (cross-filesystem)
+    if ln "$src" "$dest" 2>/dev/null; then
+        log "Hardlinked $dest"
+    else
+        ln -s "$src" "$dest"
+        log "Symlinked $dest (cross-filesystem)"
+    fi
+}
+
+# Symlink for directories
+link_dir() {
+    local src="$1"
+    local dest="$2"
+
+    rm -rf "$dest"
+    ln -s "$src" "$dest"
+    log "Symlinked $dest → $src"
 }
 
 # ==============================================================================
@@ -221,38 +252,19 @@ setup_dotfiles() {
     # Create completions directory (ZSH only)
     ensure_dir "$HOME_DIR/.zsh/completions"
 
-    # Install scripts
-    log "Installing scripts to ~/.scripts..."
-    ensure_dir "$HOME_DIR/.scripts"
-    if [ -d "$SCRIPT_DIR/scripts" ]; then
-        cp -r "$SCRIPT_DIR/scripts/"* "$HOME_DIR/.scripts/"
-        find "$HOME_DIR/.scripts" -type f -exec chmod +x {} \;
+    # Link .zshrc to home directory (must be at ~/.zshrc for zsh to find it)
+    if [ -f "$SCRIPT_DIR/.zshrc" ]; then
+        link_file "$SCRIPT_DIR/.zshrc" "$HOME_DIR/.zshrc"
     else
-        warn "Scripts directory not found in $SCRIPT_DIR. Skipping."
+        warn ".zshrc not found in $SCRIPT_DIR. Skipping."
     fi
 
-    # Copy ZSH configs
-    log "Copying ZSH configuration..."
-
-    # We use -f to force overwrite, assuming the repo version is source of truth
-    # Check if source files exist before copying
-    if [ -f "$SCRIPT_DIR/zsh/.zshrc" ]; then
-        cp "$SCRIPT_DIR/zsh/.zshrc" "$HOME_DIR/.zshrc"
-        cp "$SCRIPT_DIR/zsh/.zsh_aliases" "$HOME_DIR/.zsh_aliases"
-        cp "$SCRIPT_DIR/zsh/.p10k.zsh" "$HOME_DIR/.p10k.zsh"
+    # Link Oh My Zsh directory
+    if [ -d "$SCRIPT_DIR/ohmyzsh" ]; then
+        link_dir "$SCRIPT_DIR/ohmyzsh" "$HOME_DIR/.oh-my-zsh"
     else
-        warn "ZSH config files not found in $SCRIPT_DIR/zsh/. Skipping copy."
-    fi
-
-    # Handle Oh My Zsh
-    if [ ! -d "$HOME_DIR/.oh-my-zsh" ]; then
-        # If included in source, copy it, otherwise clone it
-        if [ -d "$SCRIPT_DIR/zsh/ohmyzsh" ]; then
-             cp -r "$SCRIPT_DIR/zsh/ohmyzsh" "$HOME_DIR/.oh-my-zsh"
-        else
-             log "Cloning Oh My Zsh..."
-             git clone https://github.com/ohmyzsh/ohmyzsh.git "$HOME_DIR/.oh-my-zsh"
-        fi
+        log "Cloning Oh My Zsh..."
+        git clone https://github.com/ohmyzsh/ohmyzsh.git "$HOME_DIR/.oh-my-zsh"
     fi
 
     # Install Plugins
@@ -271,7 +283,14 @@ setup_dotfiles() {
         fi
     }
 
-    clone_plugin "https://github.com/romkatv/powerlevel10k" "$ZSH_CUSTOM/themes/powerlevel10k"
+    # Link powerlevel10k from dotfiles submodule instead of cloning
+    ensure_dir "$ZSH_CUSTOM/themes"
+    if [ -d "$SCRIPT_DIR/powerlevel10k" ]; then
+        link_dir "$SCRIPT_DIR/powerlevel10k" "$ZSH_CUSTOM/themes/powerlevel10k"
+    else
+        clone_plugin "https://github.com/romkatv/powerlevel10k" "$ZSH_CUSTOM/themes/powerlevel10k"
+    fi
+
     clone_plugin "https://github.com/zsh-users/zsh-autosuggestions" "$ZSH_CUSTOM/plugins/zsh-autosuggestions"
     clone_plugin "https://github.com/zsh-users/zsh-syntax-highlighting.git" "$ZSH_CUSTOM/plugins/zsh-syntax-highlighting"
 }
@@ -397,12 +416,12 @@ setup_ssh_git() {
     log "Configuring SSH and Git..."
     ensure_dir "$HOME_DIR/.ssh"
 
-    # Copy base gitconfig
+    # Link gitconfig
     if [ -f "$SCRIPT_DIR/.gitconfig" ]; then
-        cp "$SCRIPT_DIR/.gitconfig" "$HOME_DIR/.gitconfig"
+        link_file "$SCRIPT_DIR/.gitconfig" "$HOME_DIR/.gitconfig"
     fi
 
-    # Set user info
+    # Set user info (stored in git's global config, not the linked file)
     git config --global user.name "$USER_NAME"
     git config --global user.email "$USER_EMAIL"
     log "Set git user: $USER_NAME <$USER_EMAIL>"
@@ -414,8 +433,9 @@ setup_ssh_git() {
         log "Set gpg.program to: $GPG_PATH"
     fi
 
+    # Link SSH config
     if [ -f "$SCRIPT_DIR/ssh_config" ]; then
-        cp "$SCRIPT_DIR/ssh_config" "$HOME_DIR/.ssh/config"
+        link_file "$SCRIPT_DIR/ssh_config" "$HOME_DIR/.ssh/config"
     fi
 
     # Authorized keys from GitHub are handled by setup_ssh_key_sync() with deduplication
@@ -587,7 +607,7 @@ main() {
         error "\$HOME does not exist."
     fi
 
-    log "Starting installation in tmpdir: $SCRIPT_DIR"
+    log "Starting installation from: $SCRIPT_DIR"
 
     detect_os
     collect_user_info

@@ -3,11 +3,17 @@
 
 set -o errexit -o pipefail -o noclobber
 
-tmpdir=$(mktemp -d)
+DOTFILES_DIR="${DOTFILES_DIR:-$HOME/.dotfiles}"
 
-# clone the current repository into a temporary directory, recursively with submodules
-git clone https://github.com/JosiahBull/dotfiles "$tmpdir"
-pushd "$tmpdir"
-git submodule update --init --recursive --depth 2
+if [ -d "$DOTFILES_DIR" ]; then
+    echo "Updating existing dotfiles at $DOTFILES_DIR..."
+    git -C "$DOTFILES_DIR" pull
+    git -C "$DOTFILES_DIR" submodule update --init --recursive --depth 2
+else
+    echo "Cloning dotfiles to $DOTFILES_DIR..."
+    git clone --recursive https://github.com/JosiahBull/dotfiles.git "$DOTFILES_DIR"
+    git -C "$DOTFILES_DIR" submodule update --init --recursive --depth 2
+fi
+
+cd "$DOTFILES_DIR"
 ./configure.sh
-popd

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2059
 
 # set -o errexit -o pipefail -o noclobber -o nounset
 

@@ -1,9 +1,13 @@
 # shellcheck disable=SC1090,SC2034,SC1091,SC2148,SC2296,SC2296
+
+# Dotfiles location
+export DOTFILES_DIR="${DOTFILES_DIR:-$HOME/.dotfiles}"
+
 export fpath=("$HOME/.zsh/completions" "${fpath[@]}")
 
-alias nzrc="nano ~/.zshrc"
+alias nzrc='nano $DOTFILES_DIR/.zshrc'
 alias szrc="source ~/.zshrc"
-alias nsrc="nano ~/.ssh/config"
+alias nsrc='nano $DOTFILES_DIR/ssh_config'
 
 if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]; then
   source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
@@ -37,14 +41,16 @@ plugins=(
 
 source "$ZSH/oh-my-zsh.sh"
 
-[[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh
+# Source p10k and aliases from dotfiles directory
+[[ -f "$DOTFILES_DIR/.p10k.zsh" ]] && source "$DOTFILES_DIR/.p10k.zsh"
 ZSH_AUTOSUGGEST_USE_ASYNC="true"
 
 setopt nocorrectall; setopt correct
 
-source "$HOME/.zsh_aliases"
+source "$DOTFILES_DIR/.zsh_aliases"
 
-export PATH="$HOME/.scripts:$HOME/.local/bin:$PATH"
+# Scripts from dotfiles, then local bin
+export PATH="$DOTFILES_DIR/scripts:$HOME/.local/bin:$PATH"
 
 GPG_TTY="$(tty)"
 export GPG_TTY

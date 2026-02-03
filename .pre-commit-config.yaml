@@ -3,34 +3,34 @@ repos:
     rev: v5.0.0
     hooks:
       - id: check-yaml
-        exclude: ^(\./zsh/ohmyzsh/|\./zsh/powerlevel10k/|zsh/\.p10k\.zsh)
+        exclude: ^(ohmyzsh/|powerlevel10k/|\.p10k\.zsh)
 
       - id: end-of-file-fixer
-        exclude: ^(\./zsh/ohmyzsh/|\./zsh/powerlevel10k/|zsh/\.p10k\.zsh)
+        exclude: ^(ohmyzsh/|powerlevel10k/|\.p10k\.zsh)
 
       - id: trailing-whitespace
-        exclude: ^(\./zsh/ohmyzsh/|\./zsh/powerlevel10k/|zsh/\.p10k\.zsh)
+        exclude: ^(ohmyzsh/|powerlevel10k/|\.p10k\.zsh)
 
       - id: debug-statements
-        exclude: ^(\./zsh/ohmyzsh/|\./zsh/powerlevel10k/|zsh/\.p10k\.zsh)
+        exclude: ^(ohmyzsh/|powerlevel10k/|\.p10k\.zsh)
 
       - id: detect-private-key
-        exclude: ^(\./zsh/ohmyzsh/|\./zsh/powerlevel10k/|zsh/\.p10k\.zsh)
+        exclude: ^(ohmyzsh/|powerlevel10k/|\.p10k\.zsh)
 
       - id: mixed-line-ending
         args: [--fix=lf]
-        exclude: ^(\./zsh/ohmyzsh/|\./zsh/powerlevel10k/|zsh/\.p10k\.zsh)
+        exclude: ^(ohmyzsh/|powerlevel10k/|\.p10k\.zsh)
 
       - id: pretty-format-json
         args: [--autofix]
-        exclude: ^(\./zsh/ohmyzsh/|\./\.devcontainer/devcontainer.json|\./zsh/powerlevel10k/|zsh/\.p10k\.zsh)
+        exclude: ^(ohmyzsh/|\.devcontainer/devcontainer.json|powerlevel10k/|\.p10k\.zsh)
 
       - id: check-case-conflict
-        exclude: ^(\./zsh/ohmyzsh/|\./zsh/powerlevel10k/|zsh/\.p10k\.zsh)
+        exclude: ^(ohmyzsh/|powerlevel10k/|\.p10k\.zsh)
 
       - id: check-added-large-files
         args: [--maxkb=1000]
-        exclude: ^(\./zsh/ohmyzsh/|\./zsh/powerlevel10k/|zsh/\.p10k\.zsh)
+        exclude: ^(ohmyzsh/|powerlevel10k/|\.p10k\.zsh)
 
       - id: check-merge-conflict
 
@@ -38,4 +38,4 @@ repos:
     rev: v0.10.0
     hooks:
       - id: shellcheck
-        exclude: ^(\./zsh/ohmyzsh/|\./zsh/powerlevel10k/|zsh/\.p10k\.zsh)
+        exclude: ^(ohmyzsh/|powerlevel10k/|\.p10k\.zsh)
