@@ -3,189 +3,327 @@
 
 set -o errexit -o pipefail -o noclobber
 
-# Check that no args are passed
-if [ "$#" -ne 0 ]; then
-    echo ">>> Usage: $0"
+# ==============================================================================
+# CONFIGURATION & CONSTANTS
+# ==============================================================================
+
+# Script directory (Portable realpath)
+SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+HOME_DIR="$HOME"
+LOCAL_BIN="$HOME_DIR/.local/bin"
+
+# Colors for logging
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+# ==============================================================================
+# HELPER FUNCTIONS
+# ==============================================================================
+
+log() {
+    echo -e "${BLUE}>>> ${NC}$1"
+}
+
+warn() {
+    echo -e "${YELLOW}>>> WARNING: ${NC}$1"
+}
+
+error() {
+    echo -e "${RED}>>> ERROR: ${NC}$1"
     exit 1
-fi
+}
 
-# Check that $HOME exists and exists and is a directory
-if [ ! -d "$HOME" ]; then
-    echo ">>> Error: \$HOME does not exist or is not a directory"
-    exit 1
-fi
+ensure_dir() {
+    if [ ! -d "$1" ]; then
+        mkdir -p "$1"
+    fi
+}
 
-# set tmpdir to the actual location of this script
-tmpdir=$(dirname "$(realpath "$0")")
+# ==============================================================================
+# OS DETECTION & SYSTEM UPDATES
+# ==============================================================================
 
-echo "tmpdir: $tmpdir"
-echo "HOME: $HOME"
+detect_os() {
+    case "$(uname -s)" in
+        Linux*)     OS="Linux";;
+        Darwin*)    OS="Mac";;
+        *)          error "Unsupported OS: $(uname -s)" ;;
+    esac
+}
 
-# check if dnf command exists
-if command -v dnf &> /dev/null
-then
-    echo ">>> dnf found, updating"
-    sudo dnf update -y
+install_sys_packages() {
+    log "Detected OS: $OS. Updating system and installing base dependencies..."
 
-    # if rocky linux, install epel-release
-    if [ -f /etc/rocky-release ]; then
-        echo ">>> Rocky Linux detected, installing epel-release"
-        sudo dnf install -y epel-release
-        /usr/bin/crb enable
+    if [ "$OS" = "Mac" ]; then
+        if ! command -v brew &> /dev/null; then
+            error "Homebrew is not installed. Please install it first (https://brew.sh/)."
+        fi
+        log "Updating Homebrew..."
+        brew update && brew upgrade
+
+        # Install Python, Pipx, and Utils
+        brew install python pipx zsh tmux curl git gnupg nano
+
+        # Add pipx to path immediately for this session
+        export PATH="$PATH:$HOME_DIR/Library/Python/3.9/bin"
+
+    elif [ -f /etc/rocky-release ] || command -v dnf &> /dev/null; then
+        log "Rocky/Fedora detected..."
+        sudo dnf update -y
+
+        if [ -f /etc/rocky-release ]; then
+            sudo dnf install -y epel-release
+            /usr/bin/crb enable
+        fi
+
+        sudo dnf install -y python3-pip pipx zsh tmux curl git gpg tar nano
+
+    elif command -v apt-get &> /dev/null; then
+        log "Debian/Ubuntu detected..."
+        sudo apt-get update && sudo apt-get upgrade -y
+        sudo apt-get install -y python3 python3-pip python3-venv pipx zsh tmux curl git gpg tar nano
+    else
+        error "No supported package manager found."
     fi
 
-    # Install python utils.
-    echo ">>> Installing python utils"
-    sudo dnf install -y python3-pip
+    # Ensure pipx path is set for the script execution
+    ensure_dir "$LOCAL_BIN"
+    export PATH="$LOCAL_BIN:$PATH"
+    pipx ensurepath
+}
 
-    # Install other applications.
-    echo ">>> Installing other applications"
-    sudo dnf install -y zsh tmux curl git gpg tar nano
+# ==============================================================================
+# PYTHON TOOLS (PIPX)
+# ==============================================================================
 
-    echo ">>> dnf complete"
-# check if apt-get command exists
-elif command -v apt-get &> /dev/null
-then
-    echo ">>> apt-get found, updating"
-    sudo apt-get update && sudo apt-get upgrade -y
+install_python_tools() {
+    log "Installing Python tools via pipx..."
 
-    # Install python utils.
-    echo ">>> Installing python utils"
-    sudo apt-get install -y python3 python3-pip python3-venv
+    # Check if pipx works, if not, warn.
+    if ! command -v pipx &> /dev/null; then
+        warn "pipx not found in path. Attempting fallback or ensuring path."
+    fi
 
-    # Install other applications.
-    echo ">>> Installing other utils"
-    sudo apt-get install -y zsh tmux curl git gpg tar nano
+    pipx install pre-commit
+}
 
-    echo "apt-get complete"
-else
-    echo ">>> Could not install packages no package manager found"
-    exit 1
-fi
+# ==============================================================================
+# ZSH & DOTFILES
+# ==============================================================================
 
-# Ensure directories exist for fish and zsh completions
-mkdir -p "$HOME/.config/fish/completions"
-mkdir -p "$HOME/.zsh/completions"
+setup_dotfiles() {
+    log "Setting up dotfiles..."
 
-# install python modules
-# I mostly only use `thefuck` for creating new git branches... eventually I'll replace it with a handful of shell scripts. :P
-pip install --break-system-packages thefuck pre-commit
+    # Create completions directory (ZSH only)
+    ensure_dir "$HOME_DIR/.zsh/completions"
 
-# Move into the temporary directory.
-pushd "$tmpdir"
+    # Clone Scripts
+    if [ -d "$HOME_DIR/.scripts" ]; then
+        log "Scripts directory exists, pulling latest..."
+        git -C "$HOME_DIR/.scripts" pull
+    else
+        git clone https://github.com/JosiahBull/shell-scripts "$HOME_DIR/.scripts"
+    fi
 
-# begin installation of dotfiles
-echo ">>> Cloning scripts..."
-git clone https://github.com/JosiahBull/shell-scripts "$HOME"/.scripts
+    # Copy ZSH configs
+    log "Copying ZSH configuration..."
 
-# install relevant zsh plugins
-echo ">>> Copying static files"
-cp "$tmpdir/zsh/.zshrc" "$HOME/.zshrc"
-cp "$tmpdir/zsh/.zsh_aliases" "$HOME/.zsh_aliases"
-cp "$tmpdir/zsh/.p10k.zsh" "$HOME/.p10k.zsh"
-cp -r "$tmpdir/zsh/ohmyzsh" "$HOME/.oh-my-zsh"
+    # We use -f to force overwrite, assuming the repo version is source of truth
+    # Check if source files exist before copying
+    if [ -f "$SCRIPT_DIR/zsh/.zshrc" ]; then
+        cp "$SCRIPT_DIR/zsh/.zshrc" "$HOME_DIR/.zshrc"
+        cp "$SCRIPT_DIR/zsh/.zsh_aliases" "$HOME_DIR/.zsh_aliases"
+        cp "$SCRIPT_DIR/zsh/.p10k.zsh" "$HOME_DIR/.p10k.zsh"
+    else
+        warn "ZSH config files not found in $SCRIPT_DIR/zsh/. Skipping copy."
+    fi
 
-echo ">>> Cloning zsh plugins from github."
-git clone --depth=1 https://gitee.com/romkatv/powerlevel10k.git "${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/themes/powerlevel10k"
-git clone https://github.com/zsh-users/zsh-autosuggestions "$HOME/.oh-my-zsh/custom/plugins/zsh-autosuggestions"
-git clone https://github.com/zsh-users/zsh-syntax-highlighting.git "$HOME/.oh-my-zsh/custom/plugins/zsh-syntax-highlighting"
+    # Handle Oh My Zsh
+    if [ ! -d "$HOME_DIR/.oh-my-zsh" ]; then
+        # If included in source, copy it, otherwise clone it
+        if [ -d "$SCRIPT_DIR/zsh/ohmyzsh" ]; then
+             cp -r "$SCRIPT_DIR/zsh/ohmyzsh" "$HOME_DIR/.oh-my-zsh"
+        else
+             log "Cloning Oh My Zsh..."
+             git clone https://github.com/ohmyzsh/ohmyzsh.git "$HOME_DIR/.oh-my-zsh"
+        fi
+    fi
 
-# install ssh and git settings
-echo ">>> Setting up ssh and git configuration"
-mkdir -p "$HOME/.ssh"
-cp "$tmpdir/.gitconfig" "$HOME/.gitconfig"
-cp "$tmpdir/ssh_config" "$HOME/.ssh/config"
-### TODO: We want to setup gpg keys here too!!
+    # Install Plugins
+    ZSH_CUSTOM="${ZSH_CUSTOM:-$HOME_DIR/.oh-my-zsh/custom}"
 
-# copy ssh keys from https://github.com/josiahBull.keys to ~/.ssh/authorized_keys
-# Just in case someone else is using this script, we'll print a large obvious warning with a delay
-# so they can cancel the script if they don't want to add my keys to their authorized_keys file.
-if [ -t 1 ]; then
-    echo "============================================================="
-    echo "WARNING: Adding my SSH keys to your authorized_keys file."
-    echo "If you don't want to do this, press Ctrl+C now to cancel."
-    echo "============================================================="
-    sleep 20
-fi
-curl https://github.com/josiahbull.keys >> ~/.ssh/authorized_keys
+    log "Installing ZSH plugins/themes..."
 
-# Install Rust (to build tooling).
-curl https://sh.rustup.rs -sSf | sh -s -- -y
-. "$HOME/.cargo/env"
+    # Helper to clone only if not exists
+    clone_plugin() {
+        local url=$1
+        local dest=$2
+        if [ ! -d "$dest" ]; then
+            git clone --depth=1 "$url" "$dest"
+        else
+            log "Plugin at $dest already exists."
+        fi
+    }
 
-# Install various Rust tools. To save compute we'll prefer binaries and fall back to building from source.
-# First, install cargo-binstall
-curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
+    clone_plugin "https://gitee.com/romkatv/powerlevel10k.git" "$ZSH_CUSTOM/themes/powerlevel10k"
+    clone_plugin "https://github.com/zsh-users/zsh-autosuggestions" "$ZSH_CUSTOM/plugins/zsh-autosuggestions"
+    clone_plugin "https://github.com/zsh-users/zsh-syntax-highlighting.git" "$ZSH_CUSTOM/plugins/zsh-syntax-highlighting"
+}
 
-# Then, install the rest of the programs - ideally using a binary but we will fallback to building.
-# XXX: Eventually we want to enable sign checking on packages here...
-mkdir -p ~/.local/bin
-cargo binstall --no-confirm bat && mv ~/.cargo/bin/bat ~/.local/bin
-~/.local/bin/bat --completion zsh > ~/.zsh/completions/_bat
-~/.local/bin/bat --completion fish > ~/.config/fish/completions/bat.fish
+# ==============================================================================
+# SSH & GIT
+# ==============================================================================
 
-cargo binstall --no-confirm cargo-autoinherit && mv ~/.cargo/bin/cargo-autoinherit ~/.local/bin
-# XXX: create manual completions for autoinherit
+setup_ssh_git() {
+    log "Configuring SSH and Git..."
+    ensure_dir "$HOME_DIR/.ssh"
 
-cargo binstall --no-confirm cargo-expand && mv ~/.cargo/bin/cargo-expand ~/.local/bin
-# XXX: create manual completions for cargo-expand
+    # Config files
+    if [ -f "$SCRIPT_DIR/.gitconfig" ]; then
+        cp "$SCRIPT_DIR/.gitconfig" "$HOME_DIR/.gitconfig"
+    fi
+    if [ -f "$SCRIPT_DIR/ssh_config" ]; then
+        cp "$SCRIPT_DIR/ssh_config" "$HOME_DIR/.ssh/config"
+    fi
 
-cargo binstall --no-confirm cargo-semver-checks && mv ~/.cargo/bin/cargo-semver-checks ~/.local/bin
-# XXX: create manual completions for cargo-semver-checks
+    # Authorized Keys logic
+    if [ -t 1 ]; then
+        echo "============================================================="
+        warn "Adding josiahbull.keys to authorized_keys."
+        echo "Press Ctrl+C within 10 seconds to cancel."
+        echo "============================================================="
+        sleep 10
+    fi
+    curl -s https://github.com/josiahbull.keys >> "$HOME_DIR/.ssh/authorized_keys"
 
-cargo binstall --no-confirm cargo-tarpaulin && mv ~/.cargo/bin/cargo-tarpaulin ~/.local/bin
-# XXX: create manual completions for cargo-tarpaulin
+    # Generate Host Key if missing
+    if [ ! -f "$HOME_DIR/.ssh/id_ed25519" ]; then
+        log "Generating new SSH key..."
+        ssh-keygen -t ed25519 -f "$HOME_DIR/.ssh/id_ed25519" -C "josiah@$(hostname)" -N ""
+        eval "$(ssh-agent -s)"
+        ssh-add "$HOME_DIR/.ssh/id_ed25519"
+        cat "$HOME_DIR/.ssh/id_ed25519.pub" >> "$HOME_DIR/.ssh/authorized_keys"
+    fi
+}
 
-cargo binstall --no-confirm cargo-udeps && mv ~/.cargo/bin/cargo-udeps ~/.local/bin
-# XXX: create manual completions for cargo-udeps
+# ==============================================================================
+# RUST TOOLS
+# ==============================================================================
 
-cargo binstall --no-confirm cargo-workspaces && mv ~/.cargo/bin/cargo-workspaces ~/.local/bin
-# XXX: create manual completions for cargo-workspaces
+setup_rust() {
+    log "Setting up Rust tooling..."
 
-cargo binstall --no-confirm ripgrep && mv ~/.cargo/bin/rg ~/.local/bin
-~/.local/bin/rg --generate=complete-zsh > ~/.zsh/completions/_rg
-~/.local/bin/rg --generate=complete-fish > ~/.config/fish/completions/rg.fish
+    ensure_dir "$LOCAL_BIN"
 
-cargo binstall --no-confirm tokei && mv ~/.cargo/bin/tokei ~/.local/bin
-# XXX: create manual completions for tokei
+    # Install Rustup temporarily
+    if ! command -v cargo &> /dev/null; then
+        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+        . "$HOME_DIR/.cargo/env"
+    fi
 
-cargo binstall --no-confirm cargo-mutants && mv ~/.cargo/bin/cargo-mutants ~/.local/bin
-~/.local/bin/cargo-mutants mutants --completions zsh > ~/.zsh/completions/_mutants
-~/.local/bin/cargo-mutants mutants --completions fish > ~/.config/fish/completions/mutants.fish
+    # Install binstall
+    if ! command -v cargo-binstall &> /dev/null; then
+        curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
+    fi
 
-cargo binstall --no-confirm just && mv ~/.cargo/bin/just ~/.local/bin
-~/.local/bin/just --completions zsh > ~/.zsh/completions/_just
-~/.local/bin/just --completions fish > ~/.config/fish/completions/just.fish
+    # Define tools: "PackageName:BinaryName"
+    # If binary name is same as package, just put "PackageName"
+    tools=(
+        "bat"
+        "cargo-autoinherit"
+        "cargo-expand"
+        "cargo-semver-checks"
+        "cargo-tarpaulin"
+        "cargo-udeps"
+        "cargo-workspaces"
+        "ripgrep:rg"
+        "tokei"
+        "cargo-mutants"
+        "just"
+        "cargo-deny"
+        "cargo-insta"
+        "cargo-release"
+    )
 
-cargo binstall --no-confirm cargo-deny && mv ~/.cargo/bin/cargo-deny ~/.local/bin
-# XXX: create manual completions for cargo-deny
+    for item in "${tools[@]}"; do
+        # Split by colon
+        PACKAGE="${item%%:*}"
+        BINARY="${item##*:}"
 
-cargo binstall --no-confirm cargo-insta && mv ~/.cargo/bin/cargo-insta ~/.local/bin
-# XXX: create manual completions for cargo-insta
+        log "Installing Rust tool: $PACKAGE..."
 
-cargo binstall --no-confirm cargo-release && mv ~/.cargo/bin/cargo-release ~/.local/bin
-# XXX: create manual completions for cargo-release
+        # Install
+        cargo binstall --no-confirm "$PACKAGE"
 
-# XXX: Some of these should be installed with a wrapper script at first invocation/checks for updates
-# after that... but that's a problem for future me.
+        # Move binary to local bin to survive rustup uninstall
+        if [ -f "$HOME_DIR/.cargo/bin/$BINARY" ]; then
+            mv -f "$HOME_DIR/.cargo/bin/$BINARY" "$LOCAL_BIN/$BINARY"
+        else
+            warn "Could not find installed binary for $PACKAGE at $HOME_DIR/.cargo/bin/$BINARY"
+            continue
+        fi
 
-# We remove Rust and cargo-binstall after we're done installing the tools and just keep the binaries.
-# NOTE: Rustup toolchains consume 1.2GB of space in the image... which is frankly insane.
-cargo uninstall cargo-binstall
-rustup self uninstall -y
+        # Generate completions (ZSH ONLY)
+        # Note: We execute the moved binary from LOCAL_BIN
+        local EXE="$LOCAL_BIN/$BINARY"
 
-# create a new ed25519 keypair for this machine, if a key does not exist already.
-mkdir -p "$HOME/.ssh"
-if [ ! -f "$HOME/.ssh/id_ed25519" ]; then
-    echo "No SSH key found. Generating a new ed25519 keypair..."
-    ssh-keygen -t ed25519 -f "$HOME/.ssh/id_ed25519" -C josiah
-fi
-if [ -z "$SSH_AGENT_PID" ]; then
-    echo "No SSH agent found. Starting a new SSH agent..."
-    eval "$(ssh-agent -s)"
-fi
-ssh-add "$HOME/.ssh/id_ed25519"
-cat ~/.ssh/id_ed25519.pub >> ~/.ssh/authorized_keys
+        case "$PACKAGE" in
+            bat)
+                "$EXE" --completion zsh > "$HOME_DIR/.zsh/completions/_bat"
+                ;;
+            ripgrep)
+                "$EXE" --generate=complete-zsh > "$HOME_DIR/.zsh/completions/_rg"
+                ;;
+            cargo-mutants)
+                "$EXE" mutants --completions zsh > "$HOME_DIR/.zsh/completions/_mutants"
+                ;;
+            just)
+                "$EXE" --completions zsh > "$HOME_DIR/.zsh/completions/_just"
+                ;;
+        esac
+    done
 
-# chsh to zsh
-chsh -s "$(which zsh)"
+    # Clean up Rust
+    log "Cleaning up Rust toolchain to save space..."
+    cargo uninstall cargo-binstall || true
+    rustup self uninstall -y
+}
+
+# ==============================================================================
+# MAIN EXECUTION
+# ==============================================================================
+
+main() {
+    # Check args
+    if [ "$#" -ne 0 ]; then
+        echo "Usage: $0"
+        exit 1
+    fi
+
+    # Sanity checks
+    if [ ! -d "$HOME" ]; then
+        error "\$HOME does not exist."
+    fi
+
+    log "Starting installation in tmpdir: $SCRIPT_DIR"
+
+    detect_os
+    install_sys_packages
+    install_python_tools
+    setup_dotfiles
+    setup_ssh_git
+    setup_rust
+
+    # Change Shell
+    if [ "$SHELL" != "$(which zsh)" ]; then
+        log "Changing shell to zsh..."
+        chsh -s "$(which zsh)"
+    fi
+
+    log "Installation Complete! Please restart your terminal."
+}
+
+main "$@"
