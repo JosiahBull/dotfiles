@@ -246,6 +246,78 @@ setup_gpg() {
 
     # Set correct permissions on gnupg directory
     chmod 600 "$HOME_DIR/.gnupg/"* 2>/dev/null || true
+
+    # Skip interactive GPG key setup in CI
+    if [ -n "$CI" ]; then
+        log "Skipping GPG key generation in CI environment."
+        return
+    fi
+
+    # Check if user already has a GPG key
+    if gpg --list-secret-keys --keyid-format LONG 2>/dev/null | grep -q "sec"; then
+        log "Existing GPG key found. Skipping key generation."
+        return
+    fi
+
+    # Interactive GPG key generation
+    echo "============================================================="
+    echo -e "${GREEN}GPG Key Setup${NC}"
+    echo "============================================================="
+    echo "No GPG signing key found. To enable signed commits, you need to:"
+    echo ""
+    echo "  1. Generate a GPG key by running:"
+    echo -e "     ${YELLOW}gpg --full-generate-key${NC}"
+    echo ""
+    echo "  2. Get your key ID by running:"
+    echo -e "     ${YELLOW}gpg --list-secret-keys --keyid-format LONG${NC}"
+    echo "     (Look for the ID after 'sec   ed25519/' or 'sec   rsa4096/')"
+    echo ""
+    echo "  3. Configure git to use your key:"
+    echo -e "     ${YELLOW}git config --global user.signingkey <YOUR_KEY_ID>${NC}"
+    echo ""
+    echo "  4. Export your public key to add to GitHub:"
+    echo -e "     ${YELLOW}gpg --armor --export <YOUR_KEY_ID> | pbcopy${NC}"
+    echo ""
+    echo "============================================================="
+    echo ""
+    read -p "Would you like to generate a GPG key now? [y/N] " -n 1 -r
+    echo ""
+
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        log "Starting GPG key generation..."
+        gpg --full-generate-key
+
+        echo ""
+        log "Listing your GPG keys..."
+        gpg --list-secret-keys --keyid-format LONG
+
+        echo ""
+        echo "============================================================="
+        echo "Copy your key ID from above (the part after 'sec   ed25519/' or 'sec   rsa4096/')"
+        echo "============================================================="
+        read -p "Enter your GPG key ID: " GPG_KEY_ID
+
+        if [ -n "$GPG_KEY_ID" ]; then
+            git config --global user.signingkey "$GPG_KEY_ID"
+            log "Configured git to use signing key: $GPG_KEY_ID"
+
+            echo ""
+            read -p "Copy public key to clipboard for GitHub? [y/N] " -n 1 -r
+            echo ""
+            if [[ $REPLY =~ ^[Yy]$ ]]; then
+                if [ "$OS" = "Mac" ]; then
+                    gpg --armor --export "$GPG_KEY_ID" | pbcopy
+                    log "Public key copied to clipboard. Add it to GitHub at: https://github.com/settings/keys"
+                else
+                    gpg --armor --export "$GPG_KEY_ID" | xclip -selection clipboard 2>/dev/null || \
+                    gpg --armor --export "$GPG_KEY_ID" | xsel --clipboard 2>/dev/null || \
+                    { log "Public key:"; gpg --armor --export "$GPG_KEY_ID"; }
+                fi
+            fi
+        fi
+    else
+        log "Skipping GPG key generation. You can run 'gpg --full-generate-key' later."
+    fi
 }
 
 # ==============================================================================
@@ -261,13 +333,11 @@ setup_ssh_git() {
         cp "$SCRIPT_DIR/.gitconfig" "$HOME_DIR/.gitconfig"
     fi
 
-    # Set GPG program path based on OS
-    if [ "$OS" = "Mac" ]; then
-        GPG_PATH="$(which gpg)"
-        if [ -n "$GPG_PATH" ]; then
-            git config --global gpg.program "$GPG_PATH"
-            log "Set gpg.program to: $GPG_PATH"
-        fi
+    # Set GPG program path dynamically (works across all platforms)
+    GPG_PATH="$(which gpg)"
+    if [ -n "$GPG_PATH" ]; then
+        git config --global gpg.program "$GPG_PATH"
+        log "Set gpg.program to: $GPG_PATH"
     fi
     if [ -f "$SCRIPT_DIR/ssh_config" ]; then
         cp "$SCRIPT_DIR/ssh_config" "$HOME_DIR/.ssh/config"

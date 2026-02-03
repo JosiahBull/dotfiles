@@ -2,8 +2,6 @@
 	gpgsign = true
 [init]
 	defaultBranch = main
-[gpg]
-	program = gpg
 [help]
 	autocorrect = 5
 [alias]
