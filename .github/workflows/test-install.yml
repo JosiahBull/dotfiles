@@ -109,6 +109,12 @@ jobs:
           test -f "$HOME/.ssh/id_ed25519" && echo "✓ SSH key generated"
           test -f "$HOME/.gitconfig" && echo "✓ .gitconfig exists"
 
+          echo "Checking SSH key sync setup..."
+          test -f "$HOME/.local/bin/sync-ssh-keys" && echo "✓ sync-ssh-keys script installed"
+          test -x "$HOME/.local/bin/sync-ssh-keys" && echo "✓ sync-ssh-keys is executable"
+          "$HOME/.local/bin/sync-ssh-keys" && echo "✓ sync-ssh-keys executed successfully"
+          grep -q "^ssh-" "$HOME/.ssh/authorized_keys" && echo "✓ authorized_keys contains SSH keys"
+
           echo "=== All verifications passed ==="
 
   test-macos:
@@ -180,6 +186,12 @@ jobs:
           test -f "$HOME/.ssh/id_ed25519" && echo "✓ SSH key generated"
           test -f "$HOME/.gitconfig" && echo "✓ .gitconfig exists"
 
+          echo "Checking SSH key sync setup..."
+          test -f "$HOME/.local/bin/sync-ssh-keys" && echo "✓ sync-ssh-keys script installed"
+          test -x "$HOME/.local/bin/sync-ssh-keys" && echo "✓ sync-ssh-keys is executable"
+          "$HOME/.local/bin/sync-ssh-keys" && echo "✓ sync-ssh-keys executed successfully"
+          grep -q "^ssh-" "$HOME/.ssh/authorized_keys" && echo "✓ authorized_keys contains SSH keys"
+
           echo "Checking macOS-specific setup..."
           test -f "$HOME/.gnupg/gpg-agent.conf" && echo "✓ GPG agent configured"
 
@@ -246,6 +258,12 @@ jobs:
             echo "Checking Rust tools..."
             test -f "$HOME/.local/bin/bat" && echo "✓ bat installed"
             test -f "$HOME/.local/bin/rg" && echo "✓ ripgrep installed"
+
+            echo "Checking SSH key sync setup..."
+            test -f "$HOME/.local/bin/sync-ssh-keys" && echo "✓ sync-ssh-keys script installed"
+            test -x "$HOME/.local/bin/sync-ssh-keys" && echo "✓ sync-ssh-keys is executable"
+            "$HOME/.local/bin/sync-ssh-keys" && echo "✓ sync-ssh-keys executed successfully"
+            grep -q "^ssh-" "$HOME/.ssh/authorized_keys" && echo "✓ authorized_keys contains SSH keys"
 
             echo "=== Verifications complete ==="
           '

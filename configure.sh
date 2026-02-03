@@ -416,15 +416,7 @@ setup_ssh_git() {
         cp "$SCRIPT_DIR/ssh_config" "$HOME_DIR/.ssh/config"
     fi
 
-    # Authorized Keys logic
-    if [ -t 1 ]; then
-        echo "============================================================="
-        warn "Adding josiahbull.keys to authorized_keys."
-        echo "Press Ctrl+C within 10 seconds to cancel."
-        echo "============================================================="
-        sleep 10
-    fi
-    curl -s https://github.com/josiahbull.keys >> "$HOME_DIR/.ssh/authorized_keys"
+    # Authorized keys from GitHub are handled by setup_ssh_key_sync() with deduplication
 
     # Generate Host Key if missing
     if [ ! -f "$HOME_DIR/.ssh/id_ed25519" ]; then
@@ -434,6 +426,46 @@ setup_ssh_git() {
         ssh-add "$HOME_DIR/.ssh/id_ed25519"
         cat "$HOME_DIR/.ssh/id_ed25519.pub" >> "$HOME_DIR/.ssh/authorized_keys"
     fi
+}
+
+# ==============================================================================
+# SSH KEY SYNC CRON
+# ==============================================================================
+
+setup_ssh_key_sync() {
+    log "Setting up SSH key sync cronjob..."
+
+    # Install the sync script
+    if [ -f "$SCRIPT_DIR/scripts/sync-ssh-keys.sh" ]; then
+        cp "$SCRIPT_DIR/scripts/sync-ssh-keys.sh" "$LOCAL_BIN/sync-ssh-keys"
+        chmod +x "$LOCAL_BIN/sync-ssh-keys"
+        log "Installed sync-ssh-keys to $LOCAL_BIN/"
+    else
+        warn "sync-ssh-keys.sh not found in scripts/. Skipping SSH key sync setup."
+        return
+    fi
+
+    # Ensure log directory exists
+    ensure_dir "$HOME_DIR/.local/log"
+
+    # Define cron job (every 6 hours)
+    CRON_JOB="0 */6 * * * $LOCAL_BIN/sync-ssh-keys >> $HOME_DIR/.local/log/ssh-key-sync.log 2>&1"
+    CRON_MARKER="# dotfiles-ssh-key-sync"
+
+    # Skip cron setup in CI (no crontab available)
+    if [ -n "$CI" ]; then
+        log "Skipping cron setup (CI environment detected)."
+    elif crontab -l 2>/dev/null | grep -q "$CRON_MARKER"; then
+        log "SSH key sync cron job already installed."
+    else
+        # Add cron job
+        (crontab -l 2>/dev/null || true; echo "$CRON_JOB $CRON_MARKER") | crontab -
+        log "Installed SSH key sync cron job (runs every 6 hours)."
+    fi
+
+    # Run sync immediately (uses the new deduplicating script)
+    log "Running initial SSH key sync..."
+    "$LOCAL_BIN/sync-ssh-keys" || warn "Initial sync failed (network issue?)"
 }
 
 # ==============================================================================
@@ -563,6 +595,7 @@ main() {
     setup_dotfiles
     setup_gpg
     setup_ssh_git
+    setup_ssh_key_sync
     setup_rust
 
     # Change Shell (skip in CI/non-interactive - requires PAM authentication)
