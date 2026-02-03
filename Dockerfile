@@ -10,18 +10,17 @@ RUN echo "Acquire::http::Pipeline-Depth 0;" > /etc/apt/apt.conf.d/99custom && \
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=Pacific/Auckland
+ENV DOTFILES_DIR=/root/.dotfiles
 RUN apt-get update && apt-get install -y curl tzdata sudo git software-properties-common zsh \
     pkg-config libssl-dev && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Install dotfiles.
+# Install dotfiles to ~/.dotfiles (persistent for linking)
 RUN --mount=type=bind,source=.,target=/tmp/dotfiles,readonly \
-    cp -r /tmp/dotfiles /tmp/dotfiles-copy && \
-    cd /tmp/dotfiles-copy && \
+    cp -r /tmp/dotfiles "$DOTFILES_DIR" && \
+    cd "$DOTFILES_DIR" && \
     git submodule update --init --recursive --depth 2 && \
     ./configure.sh && \
-    # Cleanup after installation
-    rm -rf /tmp/dotfiles-copy && \
     # Cleanup the apt lists (again).
     apt-get clean && rm -rf /var/lib/apt/lists/*
 

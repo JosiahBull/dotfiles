@@ -82,9 +82,10 @@ jobs:
           docker run --rm "$IMAGE" -c '
             set -e
             echo "=== Shell Environment ==="
-            test -f ~/.zshrc && echo "✓ .zshrc exists"
-            test -f ~/.p10k.zsh && echo "✓ .p10k.zsh exists"
-            test -d ~/.oh-my-zsh && echo "✓ oh-my-zsh installed"
+            test -f ~/.zshrc && echo "✓ .zshrc exists (linked)"
+            test -d ~/.dotfiles && echo "✓ ~/.dotfiles exists"
+            test -f ~/.dotfiles/.p10k.zsh && echo "✓ .p10k.zsh in dotfiles"
+            test -L ~/.oh-my-zsh && echo "✓ oh-my-zsh symlinked"
           '
       - name: Smoke test - Node.js
         run: |
