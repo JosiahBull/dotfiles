@@ -5,11 +5,35 @@
 [help]
 	autocorrect = 5
 [alias]
+	# Common shortcuts
+	co = checkout
+	br = branch
+	st = status
+	cm = commit
+	# Stash with untracked files
 	stash = stash save --include-untracked
+	# Amend without editing message
+	amend = commit --amend --no-edit
+	# Unstage files
+	unstage = reset HEAD --
+	# Pretty log
+	lg = log --oneline --graph --decorate -20
+	# Fetch latest main and rebase current branch onto it
+	rom = !git fetch origin main:main && git rebase main
 [safe]
 	directory = /workspace/*
 [push]
 	default = current
 	autoSetupRemote = always
+[pull]
+	rebase = true
+[fetch]
+	prune = true
+[diff]
+	algorithm = histogram
+[merge]
+	conflictstyle = zdiff3
+[rerere]
+	enabled = true
 [core]
 	editor = vim
