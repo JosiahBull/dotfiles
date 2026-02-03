@@ -26,7 +26,7 @@
 	directory = ~/work/*
 [push]
 	default = current
-	autoSetupRemote = always
+	autoSetupRemote = true
 [pull]
 	rebase = true
 [fetch]
