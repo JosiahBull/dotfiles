@@ -45,7 +45,6 @@ setopt nocorrectall; setopt correct
 source "$HOME/.zsh_aliases"
 
 export PATH="$HOME/.scripts:$HOME/.local/bin:$PATH"
-eval "$(thefuck --alias)"
 
 GPG_TTY="$(tty)"
 export GPG_TTY

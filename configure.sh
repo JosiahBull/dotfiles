@@ -111,6 +111,51 @@ install_python_tools() {
 }
 
 # ==============================================================================
+# NODE.JS & TOOLS
+# ==============================================================================
+
+setup_node() {
+    log "Setting up Node.js (nvm), pnpm, and Claude CLI..."
+
+    export NVM_DIR="$HOME_DIR/.nvm"
+
+    # 1. Install nvm if missing
+    if [ ! -d "$NVM_DIR" ]; then
+        log "Installing nvm..."
+        curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
+    else
+        log "nvm already installed."
+    fi
+
+    # 2. Load nvm into current session
+    # This allows us to use 'nvm', 'node', and 'npm' immediately below
+    if [ -s "$NVM_DIR/nvm.sh" ]; then
+        . "$NVM_DIR/nvm.sh"
+    else
+        warn "Could not load nvm.sh. Node installation may fail."
+    fi
+
+    # 3. Install/Update Node (LTS Version)
+    log "Installing latest LTS Node.js..."
+    nvm install --lts
+    nvm use --lts
+
+    # 4. Install Global Tools
+    log "Installing global npm packages: pnpm..."
+    npm install -g pnpm
+
+    # 5. Install Claude Code
+    # On Mac, use brew cask. On Linux, fallback to npm.
+    if [ "$OS" = "Mac" ]; then
+        log "Installing Claude Code via Homebrew Cask..."
+        brew install --cask claude-code
+    else
+        log "Installing Claude Code via script (Linux fallback)..."
+        curl -fsSL https://claude.ai/install.sh | bash
+    fi
+}
+
+# ==============================================================================
 # ZSH & DOTFILES
 # ==============================================================================
 
@@ -313,6 +358,7 @@ main() {
     detect_os
     install_sys_packages
     install_python_tools
+    setup_node
     setup_dotfiles
     setup_ssh_git
     setup_rust
