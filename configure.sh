@@ -221,12 +221,14 @@ setup_dotfiles() {
     # Create completions directory (ZSH only)
     ensure_dir "$HOME_DIR/.zsh/completions"
 
-    # Clone Scripts
-    if [ -d "$HOME_DIR/.scripts" ]; then
-        log "Scripts directory exists, pulling latest..."
-        git -C "$HOME_DIR/.scripts" pull
+    # Install scripts
+    log "Installing scripts to ~/.scripts..."
+    ensure_dir "$HOME_DIR/.scripts"
+    if [ -d "$SCRIPT_DIR/scripts" ]; then
+        cp -r "$SCRIPT_DIR/scripts/"* "$HOME_DIR/.scripts/"
+        find "$HOME_DIR/.scripts" -type f -exec chmod +x {} \;
     else
-        git clone https://github.com/JosiahBull/shell-scripts "$HOME_DIR/.scripts"
+        warn "Scripts directory not found in $SCRIPT_DIR. Skipping."
     fi
 
     # Copy ZSH configs

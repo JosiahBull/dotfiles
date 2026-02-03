@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+
+# Author: Josiah Bull <josiah.bull7@gmail.com>
+# License: MIT/Apache-2.0
+
+set -o errexit -o pipefail -o noclobber -o nounset
+
+DOCKER_USER="robot\$devbox"
+DOCKER_PASS="$(cat ~/.docker/.env)"
+DEVBOX_CONTAINER_NAME="devbox_$(whoami)-devbox-1"
+BUILDBOX_IMAGE_NAME="harbor.partly.pro/partly/buildbox:latest"
+BUILD_DIR="$HOME/Documents/partlythird"
+
+echo "Starting devbox reset..." >&2
+
+if ! docker info >/dev/null 2>&1; then
+    echo "Docker is not running. Please start Docker and try again." >&2
+    exit 1
+fi
+
+# Check if there is an existing devbox container running
+if [ "$(docker ps -q -f name="$DEVBOX_CONTAINER_NAME")" ]; then
+    echo "Stopping running devbox container..." >&2
+    docker stop "$DEVBOX_CONTAINER_NAME" || echo "Error stopping devbox container" >&2
+fi
+
+# Remove the existing containers
+if [ "$(docker ps -a -q -f name="$DEVBOX_CONTAINER_NAME")" ]; then
+    echo "Removing existing devbox container..." >&2
+    docker rm "$DEVBOX_CONTAINER_NAME" || echo "Error removing devbox container" >&2
+fi
+
+if [ "$(docker ps -a -q -f name=$BUILDBOX_IMAGE_NAME)" ]; then
+    echo "Removing existing buildbox container..." >&2
+    docker rm $BUILDBOX_IMAGE_NAME || echo "Error removing buildbox container" >&2
+fi
+
+# Login to Docker
+rm -f ~/.docker/config.json
+docker login -u "$DOCKER_USER" -p "$DOCKER_PASS" harbor.partly.pro || echo "Error logging in to Docker" >&2
+
+sleep 1
+
+# Build Buildbox
+pushd "$BUILD_DIR" || echo "Error pushing build dir onto directory stack" >&2
+echo "Building Buildbox Container..."
+./pipeline/build.sh buildbox
+echo "BuildBox Container built successfully."
+echo "Building Devbox Container..."
+./pipeline/build.sh devbox
+echo "Devbox Container built successfully."
+popd || echo "Error popping build dir off directory stack" >&2
+
+# Start Devbox
+echo "Starting Devbox..."
+current_dir=$(pwd)
+cd "$BUILD_DIR"
+./devbox zsh && cd "$current_dir" || echo "Error starting zsh" >&2
+
+echo "Devbox reset completed." >&2

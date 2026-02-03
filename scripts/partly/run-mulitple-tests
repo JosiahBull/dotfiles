@@ -1,0 +1,80 @@
+#!/usr/bin/env bash
+
+# Author: Josiah Bull <josiah.bull7@gmail.com>
+# License: MIT/Apache-2.0
+
+# This script is designed to wrap around gitlab-ci-debugger to enable quickly running
+# multiple CI tests back-to-back
+
+set -o errexit -o pipefail -o noclobber -o nounset
+
+RED='\033[0;31m'
+PURPLE='\033[0;35m'
+YELLOW='\033[0;33m'
+RESET='\033[0m'
+
+declare -a packages=()
+reset_compose_between_tests=false # --reset-compose, -r
+reset_pnpm_between_tests=false # --reset-pnpm, -p
+
+HELP_MESSAGE="Usage: run-multiple-tests [options] [packages]
+    ${PURPLE}-r${RESET}, ${PURPLE}--reset-compose${RESET}: Reset the docker-compose environment between tests
+    ${PURPLE}-p${RESET}, ${PURPLE}--reset-pnpm${RESET}: Reset the pnpm cache between tests"
+
+# parse the arguments. If it doesn't start with -, add to packages. If it does, check if it's a flag
+# and set the appropriate bit in the flags variable
+# if it's an unrecognised flag, or we encounter --help, -h, or help, print the help message and exit
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -r|--reset-compose)
+            reset_compose_between_tests=true
+            shift
+            ;;
+        -p|--reset-pnpm)
+            reset_pnpm_between_tests=true
+            shift
+            ;;
+        --help|-h|help)
+            echo -e "$HELP_MESSAGE"
+            exit 0
+            ;;
+        -*)
+            echo -e "${RED}Unrecognised flag: $1${RESET}"
+            echo -e "$HELP_MESSAGE"
+            exit 1
+            ;;
+        *)
+            packages+=("$1")
+            shift
+            ;;
+    esac
+done
+
+# if no packages were provided, print the help message and exit
+if [[ ${#packages[@]} -eq 0 ]]; then
+    echo -e "${YELLOW}No packages provided${RESET}"
+    echo -e "$HELP_MESSAGE"
+    exit 1
+fi
+
+# ensure ./compose exists, and is executable
+if [[ ! -x ./compose ]]; then
+    echo -e "${RED}compose script not found or not executable, are you in the root of the partly repository?${RESET}"
+    exit 1
+fi
+
+# for each package, run the gitlab-ci-debugger script
+for package in "${packages[@]}"; do
+    echo -e "${PURPLE}Running gitlab-ci-debugger for $package${RESET}"
+
+    cargo run --release -p gitlab-ci-debugger -- "$package"
+
+    if [[ $reset_compose_between_tests == true ]]; then
+        echo -e "${PURPLE}Cleaning docker-compose environment${RESET}"
+        ./compose down -v
+    fi
+    if [[ $reset_pnpm_between_tests == true ]]; then
+        echo -e "${PURPLE}Cleaning pnpm cache${RESET}"
+        pnpm clean
+    fi
+done

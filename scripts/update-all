@@ -1,0 +1,96 @@
+#!/usr/bin/env bash
+
+# Author: Josiah Bull <josiah.bull7@gmail.com>
+# License: MIT/Apache-2.0
+
+# Wrapper script to update all installed packages on a system, wherever possible
+
+set -o errexit -o pipefail -o noclobber -o nounset
+
+current_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$current_dir"/functions.sh
+
+set_log "update-all"
+
+# Update System
+# Ubuntu
+if [ -f /etc/lsb-release ]; then
+  cmd=("sudo" "apt-get" "update")
+  run_cmd_wrap "${cmd[@]}"
+  cmd=("sudo" "apt-get" "upgrade" "-y")
+  run_cmd_wrap "${cmd[@]}"
+  cmd=("sudo" "apt-get" "dist-upgrade" "-y")
+  run_cmd_wrap "${cmd[@]}"
+  cmd=("sudo" "apt-get" "autoremove" "-y")
+  run_cmd_wrap "${cmd[@]}"
+  cmd=("sudo" "apt-get" "autoclean")
+  run_cmd_wrap "${cmd[@]}"
+# Fedora
+elif [ -f /etc/fedora-release ]; then
+  cmd=("sudo" "dnf" "check-update")
+  run_cmd_wrap "${cmd[@]}"
+  cmd=("sudo" "dnf" "upgrade" "--refresh" "-y")
+  run_cmd_wrap "${cmd[@]}"
+  cmd=("sudo" "dnf" "autoremove" "-y")
+  run_cmd_wrap "${cmd[@]}"
+  cmd=("sudo" "dnf" "clean" "all")
+  run_cmd_wrap "${cmd[@]}"
+else
+  exit_error "Unsupported distribution"
+fi
+
+# Update device firmware
+if [ -f /usr/bin/fwupdmgr ]; then
+  cmd=("sudo" "fwupdmgr" "refresh" "--force")
+  run_cmd_wrap "${cmd[@]}"
+  cmd=("sudo" "fwupdmgr" "update" "--no-reboot-check" "--assume-yes")
+  run_cmd_wrap "${cmd[@]}"
+else
+  warn "fwupdmgr not found, skipping firmware update"
+fi
+
+# Update Snaps
+if which snap &> /dev/null; then
+  cmd=("sudo" "snap" "refresh")
+  run_cmd_wrap "${cmd[@]}"
+fi
+
+# Update Flatpaks
+if which flatpak &> /dev/null; then
+  cmd=("sudo" "flatpak" "update")
+  run_cmd_wrap "${cmd[@]}"
+fi
+
+# Update Pip if not externally managed, by checking if /usr/lib/python3.12/EXTERNALLY-MANAGED exists
+externally_managed_exists=$(find /usr/lib/ -type f -name "EXTERNALLY-MANAGED" | wc -l)
+if [ "$externally_managed_exists" -eq 0 ]; then
+  cmd=("pip" "install" "--upgrade" "pip")
+  run_cmd_wrap "${cmd[@]}"
+else
+  debug "Pip is externally managed, skipping update"
+fi
+
+# Update Rust
+if which rustup &> /dev/null; then
+  cmd=("rustup" "update")
+  run_cmd_wrap "${cmd[@]}"
+  cmd=("cargo" "install-update" "-a")
+  run_cmd_wrap "${cmd[@]}"
+fi
+
+# Update NPM Packages
+if which npm &> /dev/null; then
+  cmd=("npm" "install" "-g" "npm@latest")
+  run_cmd_wrap "${cmd[@]}"
+
+  cmd=("npm" "update" "-g")
+  run_cmd_wrap "${cmd[@]}"
+fi
+
+# Update Gcloud
+if which gcloud &> /dev/null; then
+  debug_cmd "gcloud components update"
+  echo "yes" | "$HOME"/.google-cloud-sdk/bin/gcloud components update
+fi
+
+exit_success

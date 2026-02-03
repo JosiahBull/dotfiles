@@ -1,0 +1,867 @@
+#!/usr/bin/env python3
+# PYTHON_ARGCOMPLETE_OK
+
+# Author: Josiah Bull <josiah.bull7@gmail.com>
+# License: MIT/Apache-2.0
+
+# This script aims to automate the rebasing and merging of GL merge requests, it will:
+# 1. Automatically poll a provided merge request for changes.
+# 2. It will automatically trigger a rebase of the merge request if it is out of date.
+# 3. If will automatically kick off tests, and a dev-env deploy if configured.
+# 4. It will check for *new* comments on the merge request and halt.
+# 5. If approved and all tests passing, will merge the merge request automatically.
+
+import atexit
+from dataclasses import dataclass
+from enum import Enum
+import logging as baselogging
+import os
+import sys
+import time
+from typing import Final
+import argparse
+
+import colorama
+import art
+import gitlab
+import argcomplete
+
+# -------------------------------------------- CONFIG -------------------------------------------- #
+
+DEFAULT_ENV_FILE_LOCATION: Final[str] = "~/.ssh/.env"
+LOG_FORMAT: Final[str] = "[%(filename)s]: %(message)s"
+USERNAME: Final[str] = "jo"
+PROJECT_ID: Final[int] = 2  # id of 'thepartly/partly' project.
+LOG_LINES: Final[int] = 5
+
+# --------------------------------------- HELPER FUNCTIONS --------------------------------------- #
+
+IS_TTY: Final[bool] = sys.stdout.isatty()
+
+
+class logging:
+    message_queue = []
+
+    @staticmethod
+    def log(message: str, level) -> None:
+        if IS_TTY:
+            # if the message is below the current logging level, skip
+            if level < baselogging.getLogger().getEffectiveLevel():
+                return
+            # if this is the same as the previous log message, skip
+            if (
+                len(logging.message_queue) > 0
+                and logging.message_queue[-1][1] == message
+                and logging.message_queue[-1][0] == level
+            ):
+                return
+            logging.message_queue.append((level, message))
+            if len(logging.message_queue) > LOG_LINES:
+                logging.message_queue = logging.message_queue[-3:]
+        else:
+            if level == baselogging.DEBUG:
+                baselogging.debug(message)
+            elif level == baselogging.INFO:
+                baselogging.info(message)
+            elif level == baselogging.WARNING:
+                baselogging.warning(message)
+            elif level == baselogging.ERROR:
+                baselogging.error(message)
+
+    @staticmethod
+    def debug(message: str) -> None:
+        logging.log(message, baselogging.DEBUG)
+
+    @staticmethod
+    def info(message: str) -> None:
+        logging.log(message, baselogging.INFO)
+
+    @staticmethod
+    def warning(message: str) -> None:
+        logging.log(message, baselogging.WARNING)
+
+    @staticmethod
+    def error(message: str) -> None:
+        logging.log(message, baselogging.ERROR)
+
+    def print_last_messages():
+        for level, message in logging.message_queue:
+            if level == baselogging.DEBUG:
+                baselogging.debug(message)
+            elif level == baselogging.INFO:
+                baselogging.info(message)
+            elif level == baselogging.WARNING:
+                baselogging.warning(message)
+            elif level == baselogging.ERROR:
+                baselogging.error(message)
+        # print extra new lines to ensure we always print *exactly* LOG_LINES
+        for _ in range(min(0, LOG_LINES - len(logging.message_queue))):
+            print()
+
+
+class ColoredFormatter(baselogging.Formatter):
+    """
+    A formatter to add color to log messages.
+    """
+
+    log_format = LOG_FORMAT
+    FORMATS = {
+        baselogging.DEBUG: colorama.Fore.CYAN
+        + "[DEBUG]"
+        + log_format
+        + colorama.Style.RESET_ALL,
+        baselogging.INFO: colorama.Fore.BLUE
+        + "[INFO]"
+        + log_format
+        + colorama.Style.RESET_ALL,
+        baselogging.WARNING: colorama.Fore.YELLOW
+        + "[WARN]"
+        + log_format
+        + colorama.Style.RESET_ALL,
+        baselogging.ERROR: colorama.Fore.RED
+        + "[ERROR]"
+        + log_format
+        + colorama.Style.RESET_ALL,
+        baselogging.CRITICAL: colorama.Fore.MAGENTA
+        + "[CRITICAL]"
+        + log_format
+        + colorama.Style.RESET_ALL,
+    }
+
+    def format(self, record):
+        log_fmt = self.FORMATS.get(record.levelno)
+        formatter = baselogging.Formatter(log_fmt)
+        return formatter.format(record)
+
+
+@dataclass(frozen=True)
+class DevEnv:
+    id: int
+
+    @property
+    def deploy_name(self) -> str:
+        return f"deploy_dev{self.id}"
+
+
+class LogLevel(Enum):
+    DEBUG = baselogging.DEBUG
+    INFO = baselogging.INFO
+    WARNING = baselogging.WARNING
+    ERROR = baselogging.ERROR
+    CRITICAL = baselogging.CRITICAL
+
+    def __str__(self) -> str:
+        return self.name
+
+    def from_string(value: str) -> "LogLevel":
+        value = value.upper()
+
+        if value == "DEBUG":
+            return LogLevel.DEBUG
+        elif value == "INFO":
+            return LogLevel.INFO
+        elif value == "WARNING":
+            return LogLevel.WARNING
+        elif value == "ERROR":
+            return LogLevel.ERROR
+        elif value == "CRITICAL":
+            return LogLevel.CRITICAL
+        else:
+            raise ValueError("Invalid log level: {}".format(value))
+
+
+class DiscussionStatus(Enum):
+    BlockingDiscussions = 1
+    DiscussionsResolved = 2
+
+
+class OpenStatus(Enum):
+    Open = 1
+    Closed = 2
+    Merged = 3
+
+
+class DraftStatus(Enum):
+    Draft = 1
+    Ready = 2
+
+
+class WipStatus(Enum):
+    Wip = 1
+    Ready = 2
+
+
+class RebaseStatus(Enum):
+    Checking = 0
+    UpToDate = 1
+    OutOfDate = 2
+    Conflict = 3
+
+
+class ApprovalStatus(Enum):
+    Approved = 1
+    NotApproved = 2
+
+
+class TestStatus(Enum):
+    NotRun = 1
+    Running = 2
+    Started = 3
+    Failed = 4
+    Finished = 5
+
+
+class MrCompleter:
+    def __init__(self, parser):
+        self.parser = parser
+
+    def __call__(self, prefix, parsed_args, **kwargs):
+        try:
+            maybe_token = os.getenv("GITLAB_TOKEN")
+            # if not maybe_token:
+            # check if token in parser
+            # maybe_token = self.parser.parse_known_args()[0].gitlab_token
+
+            if not maybe_token:
+                # check if token in .env file
+                resolved_path = os.path.expanduser(DEFAULT_ENV_FILE_LOCATION)
+                if os.path.exists(resolved_path):
+                    with open(resolved_path, "r") as f:
+                        for line in f:
+                            key, value = line.strip().split("=")
+                            if key == "GITLAB_TOKEN":
+                                maybe_token = value
+                                break
+            if not maybe_token:
+                argcomplete.warn(
+                    "No GitLab token found, cannot complete merge requests."
+                )
+                return {}
+
+            gl = gitlab.Gitlab(
+                url="https://gitlab.partly.pro/",
+                private_token=maybe_token,
+                user_agent="MrMergeCompleter",
+            )
+
+            projects = gl.projects.get(PROJECT_ID, lazy=True)
+            mrs = projects.mergerequests.list(
+                author_username=USERNAME,
+                state="opened",
+                order_by="updated_at",
+                sort="desc",
+                per_page=10,
+                page=1,
+            )
+            completion = {}
+            for mr in mrs:
+                completion[str(mr.iid)] = mr.title
+            return completion
+        except Exception as e:
+            argcomplete.warn("Failed to get token from parser ")
+
+
+def setup_logging(log_level: LogLevel) -> None:
+    """
+    Setup logging for the script.
+
+    Raises:
+        ValueError: If the log level is invalid.
+    """
+    # set the default formatter to output colored messages in the given format using the
+    # ColoredFormatter class
+    baselogging.basicConfig(
+        level=log_level.value, format=LOG_FORMAT, datefmt="%Y-%m-%d %H:%M:%S"
+    )
+    baselogging.getLogger().handlers[0].setFormatter(ColoredFormatter())
+
+
+def green_if_true_otherwise_yellow(value: bool) -> str:
+    if value:
+        return colorama.Fore.GREEN + "True" + colorama.Style.RESET_ALL
+    return colorama.Fore.YELLOW + "False" + colorama.Style.RESET_ALL
+
+
+# --------------------------------------------- ARGS --------------------------------------------- #
+
+parser = argparse.ArgumentParser(
+    description="Automatically rebase and merge a merge request."
+)
+parser.add_argument(
+    "--devenv",
+    type=int,
+    help="The ID of the dev env to do a test deploy to.",
+    choices=[1, 2, 3, 4, 5, 6, 7, 8],
+    required=True,
+)
+parser.add_argument(
+    "--mr", type=int, help="The ID of the merge request to monitor.", required=True
+).completer = MrCompleter(parser)
+
+# Add flags to check for comments, auto rebase, auto merge, dev env id, etc
+parser.add_argument(
+    "--auto-rebase",
+    action="store_true",
+    help="Automatically rebase the merge request if it is out of date.",
+    default=False,
+)
+parser.add_argument(
+    "--auto-test",
+    action="store_true",
+    help="Automatically run tests on the merge request.",
+    default=False,
+)
+parser.add_argument(
+    "--auto-deploy",
+    action="store_true",
+    help="Automatically deploy the dev env if tests pass.",
+    default=False,
+)
+parser.add_argument(
+    "--auto-merge",
+    action="store_true",
+    help="Automatically merge the merge request if it is approved and all tests pass.",
+    default=False,
+)
+parser.add_argument(
+    "--interval",
+    type=int,
+    help="The number of seconds to wait between checks.",
+    default=60,
+)
+parser.add_argument(
+    "--timeout",
+    type=int,
+    help="The number of seconds to wait before timing out.",
+    default=14400,
+)
+parser.add_argument(
+    "--log-level",
+    help="The log level to use.",
+    default=LogLevel.INFO,
+    type=LogLevel.from_string,
+    choices=list(LogLevel),
+)
+parser.add_argument(
+    "--gitlab-token",
+    type=str,
+    help="The GitLab token to use for authentication.",
+    required=False,
+)
+parser.add_argument(
+    "--env-file",
+    type=str,
+    help="The path to the .env file to use for configuration.",
+    default=DEFAULT_ENV_FILE_LOCATION,
+)
+parser.add_argument(
+    "--no-tty",
+    action="store_true",
+    help="Disable TTY mode.",
+)
+
+# -------------------------------------------- MAIN --------------------------------------------- #
+
+
+class MrMerge:
+    mr_id: int
+    auto_rebase: bool
+    auto_test: bool
+    auto_deploy: bool
+    auto_merge: bool
+    devenv: DevEnv
+    gl: gitlab.Gitlab
+    # TODO
+
+    def __init__(
+        self,
+        auto_test: bool,
+        auto_rebase: bool,
+        auto_deploy: bool,
+        auto_merge: bool,
+        gl_token: str,
+        merge_request_id: int,
+        devenv_id: int,
+    ) -> None:
+        self.auto_rebase = auto_rebase
+        self.auto_test = auto_test
+        self.auto_deploy = auto_deploy
+        self.auto_merge = auto_merge
+        self.mr_id = merge_request_id
+        self.gl = gitlab.Gitlab(
+            url="https://gitlab.partly.pro/",
+            private_token=gl_token,
+            user_agent="MrMergeHelper",
+        )
+        self.project = self.gl.projects.get(PROJECT_ID)
+        self.mr = self.project.mergerequests.get(merge_request_id)
+        self.devenv = DevEnv(devenv_id)
+
+    def is_approved(self) -> ApprovalStatus:
+        num_approvals = len(self.mr.approvals.get().approved_by)
+        if num_approvals > 0:
+            logging.debug("No approvals required.")
+            return ApprovalStatus.Approved
+        else:
+            logging.warning("Approvals required.")
+            return ApprovalStatus.NotApproved
+
+    def check_comments(self) -> DiscussionStatus:
+        discussion_status = self.mr.blocking_discussions_resolved
+        if discussion_status:
+            logging.debug("Blocking discussions have been resolved.")
+            return DiscussionStatus.DiscussionsResolved
+        else:
+            logging.warning("Blocking discussions are present.")
+            return DiscussionStatus.BlockingDiscussions
+
+    def check_is_open(self) -> OpenStatus:
+        mr_state = self.mr.state
+        if not isinstance(mr_state, str):
+            raise ValueError(
+                "Merge request state is not a string, got {}.".format(mr_state)
+            )
+        if mr_state == "opened":
+            logging.debug("Merge request is open.")
+            return OpenStatus.Open
+        elif mr_state == "closed":
+            logging.warning("Merge request is closed.")
+            return OpenStatus.Closed
+        elif mr_state == "merged":
+            logging.warning("Merge request is merged.")
+            return OpenStatus.Merged
+        else:
+            raise ValueError("Unknown merge request state: {}".format(mr_state))
+
+    def check_is_draft(self) -> DraftStatus:
+        mr_draft = self.mr.draft
+        if not isinstance(mr_draft, bool):
+            raise ValueError("Draft status is not a boolean, got {}.".format(mr_draft))
+        if mr_draft:
+            logging.warning("Merge request is a draft.")
+            return DraftStatus.Draft
+        else:
+            logging.debug("Merge request is ready.")
+            return DraftStatus.Ready
+
+    def check_is_wip(self) -> WipStatus:
+        mr_wip = self.mr.work_in_progress
+        if not isinstance(mr_wip, bool):
+            raise ValueError(
+                "Work in progress status is not a boolean, got {}.".format(mr_wip)
+            )
+        if mr_wip:
+            logging.warning("Merge request is a WIP.")
+            return WipStatus.Wip
+        else:
+            logging.debug("Merge request is ready.")
+            return WipStatus.Ready
+
+    def check_mergability(self) -> RebaseStatus:
+        mergability = self.mr.detailed_merge_status
+        if not isinstance(mergability, str):
+            raise ValueError(
+                "Merge status is not a string, got {}.".format(mergability)
+            )
+        if mergability == "mergeable":
+            logging.debug("Merge request is up to date.")
+            return RebaseStatus.UpToDate
+        elif mergability == "need_rebase":
+            logging.warning("Merge request is out of date.")
+            return RebaseStatus.OutOfDate
+        elif mergability == "checking":
+            logging.warning("Merge request is currently being checked.")
+            return RebaseStatus.Checking
+        elif mergability == "conflict":
+            logging.warning("Merge request has a conflict.")
+            return RebaseStatus.Conflict
+        else:
+            raise ValueError("Unknown merge status: {}".format(mergability))
+
+    def check_tests(self) -> TestStatus:
+        latest_pipeline = self.mr.pipelines.list(per_page=1, iterator=True).next()
+        latest_pipeline = self.project.pipelines.get(latest_pipeline.id)
+
+        if latest_pipeline.status == "running":
+            logging.warning("Tests are currently running.")
+            return TestStatus.Running
+
+        jobs = latest_pipeline.jobs.list(all=True)
+        logging.debug("found {} jobs".format(len(jobs)))
+        found_plan = False
+        for job in jobs:
+            logging.debug("found job: {} with status: {}".format(job.name, job.status))
+            if job.name == "plan":
+                found_plan = True
+                if job.status == "running":
+                    logging.warning("Tests are currently running.")
+                    return TestStatus.Running
+                elif job.status == "manual":
+                    logging.warning("Plan job is waiting for manual intervention.")
+                    return TestStatus.NotRun
+                elif job.status == "pending":
+                    logging.warning("Plan job is pending.")
+                    return TestStatus.Running
+                elif job.status != "success":
+                    logging.warning(
+                        "Tests have failed, got status: {}".format(job.status)
+                    )
+                    return TestStatus.Failed
+
+        if not found_plan:
+            logging.error("No plan job found.")
+            raise ValueError("No plan job found.")
+
+        bridges = latest_pipeline.bridges.list(all=True)
+        logging.debug("found {} bridges".format(len(bridges)))
+        found_build = False
+        for bridge in bridges:
+            logging.debug(
+                "found bridge: {} with status: {}".format(bridge.name, bridge.status)
+            )
+            if bridge.name == "build":
+                found_build = True
+                if bridge.status == "running":
+                    logging.warning("Tests are currently running.")
+                    return TestStatus.Running
+                elif bridge.status == "manual":
+                    logging.warning("Bridge is waiting for manual intervention.")
+                    return TestStatus.NotRun
+                elif bridge.status == "pending":
+                    logging.warning("Bridge is pending.")
+                    return TestStatus.Running
+                elif bridge.status != "success":
+                    logging.warning(
+                        "Tests have failed, got status: {}".format(bridge.status)
+                    )
+                    return TestStatus.Failed
+
+        if not found_build:
+            logging.warning("No build bridge found.")
+            return TestStatus.NotRun
+
+        return TestStatus.Finished
+
+    def trigger_tests(self):
+        latest_pipeline = self.mr.pipelines.list(per_page=1, iterator=True).next()
+        latest_pipeline = self.project.pipelines.get(latest_pipeline.id)
+
+        if latest_pipeline.status == "running":
+            logging.error("Tests are currently running.")
+            raise ValueError("Tests are currently running.")
+
+        jobs = latest_pipeline.jobs.list(all=True)
+        logging.debug("found {} jobs".format(len(jobs)))
+        found_plan = False
+        for job in jobs:
+            logging.debug("found job: {} with status: {}".format(job.name, job.status))
+            if job.name == "plan":
+                found_plan = True
+                if job.status == "running":
+                    logging.error("Tests are currently running.")
+                    raise ValueError("Tests are currently running.")
+                elif job.status == "manual":
+                    logging.debug("Triggering waiting plan job.")
+                    job_obj = self.project.jobs.get(job.id, lazy=True)
+                    job_obj.play()
+                elif job.status == "pending":
+                    logging.error("Plan job is pending.")
+                    raise ValueError("Plan job is pending.")
+                elif job.status != "success":
+                    logging.error(
+                        "Tests have failed, got status: {}".format(job.status)
+                    )
+                    raise ValueError("Tests have failed.")
+
+        if not found_plan:
+            logging.error("No plan job found.")
+            raise ValueError("No plan job found.")
+
+    def check_devenv(self) -> TestStatus:
+        latest_pipeline = self.mr.pipelines.list(per_page=1, iterator=True).next()
+        latest_pipeline = self.project.pipelines.get(latest_pipeline.id)
+
+        bridges = latest_pipeline.bridges.list(all=True)
+        logging.debug("found {} bridges".format(len(bridges)))
+        found_dev_env = False
+        for bridge in bridges:
+            logging.debug(
+                "found bridge: {} with status: {}".format(bridge.name, bridge.status)
+            )
+            if bridge.name == self.devenv.deploy_name:
+                found_dev_env = True
+                if bridge.status == "running":
+                    logging.warning("Dev env is currently deploying.")
+                    return TestStatus.Running
+                elif bridge.status == "manual":
+                    logging.warning("Dev env is waiting for manual intervention.")
+                    return TestStatus.NotRun
+                elif bridge.status != "success":
+                    logging.warning("Dev env has failed.")
+                    return TestStatus.Failed
+
+        if not found_dev_env:
+            logging.error("No dev env bridge found.")
+            raise ValueError("No dev env bridge found.")
+
+        return TestStatus.Finished
+
+    def deploy_devenv(self):
+        latest_pipeline = self.mr.pipelines.list(per_page=1, iterator=True).next()
+        latest_pipeline = self.project.pipelines.get(latest_pipeline.id)
+
+        bridges = latest_pipeline.bridges.list(all=True)
+        logging.debug("found {} bridges".format(len(bridges)))
+        found_dev_env = False
+        for bridge in bridges:
+            logging.info(
+                "found bridge: {} with status: {}".format(bridge.name, bridge.status)
+            )
+            if bridge.name == self.devenv.deploy_name:
+                found_dev_env = True
+                if bridge.status == "running":
+                    logging.error("Cannot deploy: Dev env is currently deploying.")
+                    raise ValueError("Cannot deploy: Dev env is currently deploying.")
+                elif bridge.status == "manual":
+                    logging.debug("Triggering waiting dev env deploy.")
+                    bridge_obj = self.project.jobs.get(bridge.id, lazy=True)
+                    bridge_obj.play()
+                elif bridge.status != "success":
+                    logging.error("Dev env has failed.")
+                    raise ValueError("Dev env has failed.")
+
+        if not found_dev_env:
+            logging.error("No dev env bridge found.")
+            raise ValueError("No dev env bridge found.")
+
+    def refresh(self):
+        self.mr = self.project.mergerequests.get(self.mr_id)
+
+    def run(self) -> bool:
+        self.refresh()
+        if self.check_is_draft() == DraftStatus.Draft:
+            return False
+        if self.check_is_wip() == WipStatus.Wip:
+            return False
+        if self.check_comments() == DiscussionStatus.BlockingDiscussions:
+            return False
+        mergeability = self.check_mergability()
+        if mergeability == RebaseStatus.Checking:
+            return False
+        if mergeability == RebaseStatus.Conflict:
+            return False
+        if mergeability == RebaseStatus.OutOfDate:
+            if self.auto_rebase:
+                logging.info("Rebasing merge request...")
+                self.mr.rebase()
+                # Wait for the rebase to complete
+                time.sleep(5)
+                self.refresh()
+
+                logging.info("Merge request has been rebased.")
+                if self.check_mergability() != RebaseStatus.UpToDate:
+                    logging.error("Rebase failed.")
+                    return False
+            else:
+                return False
+        test_state = self.check_tests()
+        if test_state == TestStatus.Running:
+            return False
+        if test_state == TestStatus.Failed:
+            return False
+        if test_state == TestStatus.NotRun:
+            if self.auto_test:
+                logging.info("Triggering tests...")
+                self.trigger_tests()
+                time.sleep(5)
+                logging.info("Tests have been triggered.")
+            return False
+        devenv_state = self.check_devenv()
+        if devenv_state == TestStatus.Running:
+            return False
+        if devenv_state == TestStatus.Failed:
+            return False
+        if devenv_state == TestStatus.NotRun:
+            if self.auto_deploy:
+                logging.info("Triggering dev env deploy...")
+                self.deploy_devenv()
+                time.sleep(5)
+                logging.info("Dev env has been triggered.")
+            return False
+        if self.is_approved() == ApprovalStatus.NotApproved:
+            return False
+        if self.check_is_open() != OpenStatus.Open:
+            return False
+        if self.auto_merge:
+            self.mr.merge(should_remove_source_branch=False)
+            logging.info("Merge request has been merged.")
+        else:
+            logging.info("Merge request is ready to be merged.")
+        return True
+
+
+def print_welcome(args):
+    print(art.text2art("MrMerge"))
+    print("Automated GitLab Merge Request Helper")
+    print("Josiah Bull - 18/04/2024")
+    print()
+    print("Starting MrMerge with the following options:")
+    print(
+        f"  - Dev Env ID: {colorama.Fore.GREEN}{args.devenv}{colorama.Style.RESET_ALL}"
+    )
+
+    # if the terminal supports it, create a clickable link to the merge request
+    print(
+        f"  - Merge Request ID: {colorama.Fore.GREEN}{args.mr}{colorama.Style.RESET_ALL}",
+        end="",
+    )
+    if IS_TTY:
+        url = f"https://gitlab.partly.pro/thepartly/partly/-/merge_requests/{args.mr}"
+        # create clickable link with label (url) using ANSI escape codes
+        print(f" \033]8;;{url}\033\\(link)\033]8;;\033\\", end="")
+    print()
+    print(f"  - Auto Rebase: {green_if_true_otherwise_yellow(args.auto_rebase)}")
+    print(f"  - Auto Test: {green_if_true_otherwise_yellow(args.auto_test)}")
+    print(f"  - Auto Deploy: {green_if_true_otherwise_yellow(args.auto_deploy)}")
+    print(f"  - Auto Merge: {green_if_true_otherwise_yellow(args.auto_merge)}")
+
+
+def update_display(args, start_time: int, timeout: int, interval: int, first: bool):
+    terminal_size = os.get_terminal_size()
+    small_size_switch_limit = 22
+    if not first:
+        # move cursor up enough lines and clear the screen, note that this strategy *does* cause the occasional flicker.
+        # this could be fixed by correctly writing spaces to block out the terminal as we go, but that sounds hard so....
+        if terminal_size.lines >= small_size_switch_limit:
+            num_lines = 20 + LOG_LINES
+        else:
+            num_lines = 3 + LOG_LINES
+
+        print("\033[F" * num_lines)
+        for _ in range(num_lines):
+            print(" " * terminal_size.columns)
+        print("\033[F" * num_lines)
+    else:
+        print()
+
+    if terminal_size.lines >= small_size_switch_limit:
+        print_welcome(args)
+        print()
+
+    elapsed = time.time() - start_time
+    elapsed = time.strftime("%H:%M:%S", time.gmtime(elapsed))
+    timeout = time.strftime("%H:%M:%S", time.gmtime(timeout))
+    time_to_next_update = interval - (time.time() - start_time) % interval
+    time_to_next_update = time.strftime("%H:%M:%S", time.gmtime(time_to_next_update))
+    status_text = f"({elapsed}/{timeout} - next status check in {time_to_next_update}s)"
+    padding = (80 - len(status_text) - 2) // 2
+    print(f"[{'=' * padding}{status_text}{'=' * padding}]")
+    logging.print_last_messages()
+
+
+if __name__ == "__main__":
+    argcomplete.autocomplete(parser)
+    args = parser.parse_args()
+    setup_logging(args.log_level)
+
+    # override tty
+    if args.no_tty is not None:
+        IS_TTY = not args.no_tty
+
+    # check if the .env file exists, handle ~/ paths
+    args.env_file = os.path.expanduser(args.env_file)
+    if not os.path.exists(args.env_file):
+        # if args.env_file != DEFAULT_ENV_FILE_LOCATION:
+        logging.error(f"Could not find .env file at {args.env_file}")
+        sys.exit(1)
+    else:
+        # save old env
+        old_env = os.environ.copy()
+
+        # register on-close handler to restore
+        def restore_env():
+            logging.info("Restoring environment variables.")
+            os.environ = old_env
+
+        atexit.register(restore_env)
+
+        # try to load .env file
+        try:
+            with open(args.env_file, "r") as f:
+                for line in f:
+                    key, value = line.strip().split("=")
+                    os.environ[key] = value
+        except Exception as e:
+            logging.error("Failed to load .env file: {}".format(e))
+            sys.exit(1)
+
+    if args.gitlab_token is None:
+        args.gitlab_token = os.getenv("GITLAB_TOKEN")
+    else:
+        # print warning about putting tokens in the command line
+        baselogging.warning(
+            f"Passing tokens in the command line is insecure, consider storing them in a .env file. The default path for this application is {DEFAULT_ENV_FILE_LOCATION}."
+        )
+        baselogging.warning("Waiting for 20 seconds before continuing.")
+        time.sleep(20)
+
+    # validate args
+    if args.auto_deploy and not args.auto_test:
+        logging.error("Cannot auto deploy without auto test.")
+        sys.exit(1)
+    if args.interval < 10:
+        logging.error("Interval must be greater than 10.")
+        sys.exit(1)
+    if args.timeout < args.interval:
+        logging.error("Timeout must be greater than interval.")
+        sys.exit(1)
+    if (
+        args.gitlab_token is None
+        or args.gitlab_token == ""
+        or not args.gitlab_token.startswith("glpat-")
+    ):
+        logging.error("Missing or invalid GitLab token.")
+        sys.exit(1)
+
+    # check if connected to a TTY
+    # if not a terminal, print welcome
+    if not IS_TTY:
+        print_welcome(args)
+
+    mr_merge = MrMerge(
+        auto_rebase=args.auto_rebase,
+        auto_test=args.auto_test,
+        auto_deploy=args.auto_deploy,
+        auto_merge=args.auto_merge,
+        gl_token=args.gitlab_token,
+        merge_request_id=args.mr,
+        devenv_id=args.devenv,
+    )
+
+    start_time = time.time()
+    next_update = start_time - 1
+    first = True
+    finished = False
+    while True:
+        if IS_TTY:
+            update_display(args, start_time, args.timeout, args.interval, first)
+
+        if time.time() > next_update:
+            next_update = time.time() + args.interval
+            finished = mr_merge.run()
+
+        if finished:
+            logging.info("Finished.")
+            break
+
+        if time.time() - start_time > args.timeout:
+            logging.error("Timeout reached, exiting.")
+            if IS_TTY:
+                update_display(args, start_time, args.timeout, args.interval, first)
+            sys.exit(1)
+
+        time.sleep(0.05)
+        first = False
+    if IS_TTY:
+        update_display(args, start_time, args.timeout, args.interval, first)
+    sys.exit(0)

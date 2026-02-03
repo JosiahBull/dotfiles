@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+
+# Author: Josiah Bull <josiah.bull7@gmail.com>
+# License: MIT/Apache-2.0
+
+set -o errexit -o pipefail -o noclobber -o nounset
+
+DOCKER_USER="robot\$devbox"
+DOCKER_PASS="$(cat ~/.docker/.env)"
+
+echo "Starting devbox reset..." >&2
+
+if ! docker info >/dev/null 2>&1; then
+    echo "Docker is not running. Please start Docker and try again." >&2
+    exit 1
+fi
+
+# Check if there are any docker containers running
+if [ "$(docker ps -q)" ]; then
+    echo "Stopping running containers..." >&2
+    # shellcheck disable=SC2046
+    docker stop $(docker ps -a -q) || echo "Error stopping containers" >&2
+fi
+
+# Remove the latest devbox image
+echo "Removing devbox image..." >&2
+docker rmi harbor.partly.pro/partly/devbox:latest || echo "Error removing devbox image" >&2
+
+yes | docker system prune --all --volumes || echo "Error pruning system" >&2
+rm -f ~/.docker/config.json
+docker login -u "$DOCKER_USER" -p "$DOCKER_PASS" harbor.partly.pro || echo "Error logging in to Docker" >&2
+
+sleep 1
+
+/home/josiah/Documents/partly/devbox zsh || echo "Error starting zsh" >&2
+
+echo "Devbox reset completed." >&2

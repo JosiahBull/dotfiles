@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+
+# Author: Josiah Bull <josiah.bull7@gmail.com>
+# License: MIT/Apache-2.0
+
+# Load environment variables from a .env file in the current directory.
+# Takes an optional argument to specify the path to the .env file, otherwise will recursively search
+# upwards from the current directory for a .env file.
+
+# Usage:
+#   Source load_env [path_to_env_file]
+
+set -o pipefail -o noclobber
+
+if [ -n "$ZSH_VERSION" ]; then
+  script_dir="$(cd "$(dirname "${(%):-%x}")" && pwd)"
+elif [ -n "$BASH_VERSION" ]; then
+  script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+else
+  exit_error_source "Unsupported shell. Please use bash or zsh."
+fi
+source "$script_dir"/functions.sh
+
+set_log "load_env"
+
+# Check for --help or -h flag
+if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
+  echo "Usage: load_env [path_to_env_file]"
+  echo "Load environment variables from a .env file."
+  echo "If no path is provided, the script will search for a .env file in the current directory and its parents."
+  return 0
+fi
+
+# Check if an argument was provided
+if [ $# -eq 1 ]; then
+  if [ -f "$1" ]; then
+    env_file="$1"
+  else
+    echo "File not found: $1"
+    return 1
+  fi
+else
+  debug "No argument provided, searching for nearest .env file."
+  current_dir="$(pwd)"
+
+
+  # Search for .env file
+  while [ "$current_dir" != "/" ]; do
+    if [ -f "$current_dir/.env" ]; then
+      env_file="$current_dir/.env"
+      break
+    fi
+    current_dir="$(dirname "$current_dir")"
+  done
+  if [ -z ${env_file+x} ]; then
+    echo ".env file not found."
+    return 1
+  fi
+
+  info "Using .env file: $env_file"
+fi
+
+# Check if .env file exists
+while IFS= read -r line; do
+  if [[ $line != \#* ]] && [[ -n $line ]]; then
+    if [[ $line == *=* ]]; then
+      key="${line%%=*}"
+      value="${line#*=}"
+
+      # If value is not present, unset the variable
+      if [ -z "$value" ]; then
+        warn "Unsetting variable: $key"
+        unset "$key"
+      else
+        export "$key"="$value"
+      fi
+    fi
+  fi
+done < "$env_file"
+
+info ".env file loaded successfully."
+return 0

@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# Author: Jan Larres <jan@majutsushi.net>
+# License: MIT/X11
+
+TIME=${1:-90s}
+sleep "$TIME"
+
+if type osascript &> /dev/null; then
+    exec osascript -e "display alert \"Tea is ready\" message \"Tea is ready since $(date +%H:%M:%S)\""
+else
+    exec zenity --info --title="Tea is ready" --text="Tea is ready since $(date +%H:%M:%S)"
+fi

@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+
+# Author: Josiah Bull <josiah.bull7@gmail.com>
+# License: MIT/Apache-2.0
+
+# Convert ova file to qcow2
+
+set -o errexit -o pipefail -o noclobber -o nounset
+
+if [ -z "$1" ] || ! test -f "$1"
+then
+    echo "Invalid or no file provided." >&2
+    exit 1
+else
+    # Generate directory to hold conversion data
+    tmp_dir=$(mktemp -d)
+    function cleanup {
+        rm -rf "${tmp_dir}"
+    }
+    trap cleanup EXIT
+
+    # Unzip files
+    tar -xvf "./${1}" -C "${tmp_dir}"
+    files=( "${tmp_dir}"/*.vmdk )
+
+    # Convert to qcow
+    qemu-img convert "${files[0]}" "${1}-img.qcow2" >&2
+fi
