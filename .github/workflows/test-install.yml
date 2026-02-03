@@ -92,6 +92,13 @@ jobs:
           echo "Checking Python tools..."
           which pre-commit && echo "✓ pre-commit installed"
 
+          echo "Checking Rust toolchain..."
+          source "$HOME/.cargo/env"
+          rustc --version && echo "✓ rustc installed"
+          cargo --version && echo "✓ cargo installed"
+          rustup run stable rustc --version && echo "✓ stable toolchain installed"
+          rustup run nightly rustc --version && echo "✓ nightly toolchain installed"
+
           echo "Checking Rust tools in ~/.local/bin..."
           test -f "$HOME/.local/bin/bat" && echo "✓ bat installed"
           test -f "$HOME/.local/bin/rg" && echo "✓ ripgrep installed"
@@ -155,6 +162,13 @@ jobs:
 
           echo "Checking Python tools..."
           which pre-commit && echo "✓ pre-commit installed"
+
+          echo "Checking Rust toolchain..."
+          source "$HOME/.cargo/env"
+          rustc --version && echo "✓ rustc installed"
+          cargo --version && echo "✓ cargo installed"
+          rustup run stable rustc --version && echo "✓ stable toolchain installed"
+          rustup run nightly rustc --version && echo "✓ nightly toolchain installed"
 
           echo "Checking Rust tools in ~/.local/bin..."
           test -f "$HOME/.local/bin/bat" && echo "✓ bat installed"

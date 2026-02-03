@@ -97,6 +97,21 @@ jobs:
             node --version && echo "✓ Node.js works"
             pnpm --version && echo "✓ pnpm works"
           '
+      - name: Smoke test - Rust toolchain
+        run: |
+          IMAGE="${{ env.REGISTRY }}/$(echo '${{ env.IMAGE_NAME }}' | tr '[:upper:]' '[:lower:]'):x86_64-$(git rev-parse --short HEAD)"
+          docker run --rm "$IMAGE" -c '
+            set -e
+            echo "=== Rust Toolchain ==="
+            source ~/.cargo/env
+            rustc --version && echo "✓ rustc works"
+            cargo --version && echo "✓ cargo works"
+            rustup show && echo "✓ rustup works"
+            rustup run stable rustc --version && echo "✓ stable toolchain works"
+            rustup run nightly rustc --version && echo "✓ nightly toolchain works"
+            test -d ~/.rustup/toolchains/stable-*/lib/rustlib/src/rust && echo "✓ rust-src (stable) installed"
+            test -d ~/.rustup/toolchains/nightly-*/lib/rustlib/src/rust && echo "✓ rust-src (nightly) installed"
+          '
       - name: Smoke test - Rust tools
         run: |
           IMAGE="${{ env.REGISTRY }}/$(echo '${{ env.IMAGE_NAME }}' | tr '[:upper:]' '[:lower:]'):x86_64-$(git rev-parse --short HEAD)"

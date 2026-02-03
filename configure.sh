@@ -445,11 +445,23 @@ setup_rust() {
 
     ensure_dir "$LOCAL_BIN"
 
-    # Install Rustup temporarily
+    # Install Rustup and Rust
     if ! command -v cargo &> /dev/null; then
+        log "Installing Rust via rustup..."
         curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
         . "$HOME_DIR/.cargo/env"
     fi
+
+    # Install stable toolchain with rust-src
+    log "Installing stable toolchain with rust-src..."
+    rustup toolchain install stable
+    rustup default stable
+    rustup component add rust-src
+
+    # Install nightly toolchain with rust-src
+    log "Installing nightly toolchain with rust-src..."
+    rustup toolchain install nightly
+    rustup component add rust-src --toolchain nightly
 
     # Install binstall
     if ! command -v cargo-binstall &> /dev/null; then
@@ -513,15 +525,16 @@ setup_rust() {
         esac
     done
 
-    # Generate rustup and cargo completions before uninstalling
+    # Generate rustup and cargo completions
     log "Generating rustup and cargo shell completions..."
     rustup completions zsh > "$HOME_DIR/.zsh/completions/_rustup"
     rustup completions zsh cargo > "$HOME_DIR/.zsh/completions/_cargo"
 
-    # Clean up Rust
-    log "Cleaning up Rust toolchain to save space..."
+    # Clean up cargo-binstall (no longer needed after installs)
     cargo uninstall cargo-binstall || true
-    rustup self uninstall -y
+
+    log "Rust setup complete. Installed toolchains:"
+    rustup show
 }
 
 # ==============================================================================
