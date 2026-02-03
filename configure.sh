@@ -19,6 +19,10 @@ BLUE='\033[0;34m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
+# User configuration (can be set via environment variables)
+USER_NAME="${GIT_USER_NAME:-}"
+USER_EMAIL="${GIT_USER_EMAIL:-}"
+
 # ==============================================================================
 # HELPER FUNCTIONS
 # ==============================================================================
@@ -40,6 +44,57 @@ ensure_dir() {
     if [ ! -d "$1" ]; then
         mkdir -p "$1"
     fi
+}
+
+# ==============================================================================
+# USER INFO COLLECTION
+# ==============================================================================
+
+collect_user_info() {
+    # Skip in CI - use env variables or defaults
+    if [ -n "$CI" ]; then
+        if [ -z "$USER_NAME" ]; then
+            USER_NAME="CI User"
+        fi
+        if [ -z "$USER_EMAIL" ]; then
+            USER_EMAIL="ci@localhost"
+        fi
+        log "Using CI defaults: $USER_NAME <$USER_EMAIL>"
+        return
+    fi
+
+    echo "============================================================="
+    echo -e "${GREEN}User Configuration${NC}"
+    echo "============================================================="
+    echo "Please provide your details for Git and GPG configuration."
+    echo "You can also set GIT_USER_NAME and GIT_USER_EMAIL environment"
+    echo "variables to skip these prompts."
+    echo "============================================================="
+    echo ""
+
+    # Collect name
+    if [ -z "$USER_NAME" ]; then
+        read -p "Full name (for git commits): " USER_NAME
+        if [ -z "$USER_NAME" ]; then
+            error "Name is required."
+        fi
+    else
+        log "Using name from environment: $USER_NAME"
+    fi
+
+    # Collect email
+    if [ -z "$USER_EMAIL" ]; then
+        read -p "Email address (for git commits): " USER_EMAIL
+        if [ -z "$USER_EMAIL" ]; then
+            error "Email is required."
+        fi
+    else
+        log "Using email from environment: $USER_EMAIL"
+    fi
+
+    echo ""
+    log "Configuration: $USER_NAME <$USER_EMAIL>"
+    echo ""
 }
 
 # ==============================================================================
@@ -284,18 +339,28 @@ setup_gpg() {
     echo ""
 
     if [[ $REPLY =~ ^[Yy]$ ]]; then
-        log "Starting GPG key generation..."
-        gpg --full-generate-key
+        log "Generating GPG key for: $USER_NAME <$USER_EMAIL>"
+
+        # Generate key using batch mode with collected user info
+        gpg --batch --gen-key <<EOF
+Key-Type: eddsa
+Key-Curve: ed25519
+Key-Usage: sign
+Subkey-Type: ecdh
+Subkey-Curve: cv25519
+Subkey-Usage: encrypt
+Name-Real: $USER_NAME
+Name-Email: $USER_EMAIL
+Expire-Date: 0
+%commit
+EOF
 
         echo ""
         log "Listing your GPG keys..."
         gpg --list-secret-keys --keyid-format LONG
 
-        echo ""
-        echo "============================================================="
-        echo "Copy your key ID from above (the part after 'sec   ed25519/' or 'sec   rsa4096/')"
-        echo "============================================================="
-        read -p "Enter your GPG key ID: " GPG_KEY_ID
+        # Extract the key ID automatically
+        GPG_KEY_ID=$(gpg --list-secret-keys --keyid-format LONG "$USER_EMAIL" 2>/dev/null | grep "sec" | head -1 | sed -E 's/.*\/([A-F0-9]+).*/\1/')
 
         if [ -n "$GPG_KEY_ID" ]; then
             git config --global user.signingkey "$GPG_KEY_ID"
@@ -314,6 +379,8 @@ setup_gpg() {
                     { log "Public key:"; gpg --armor --export "$GPG_KEY_ID"; }
                 fi
             fi
+        else
+            warn "Could not automatically detect GPG key ID. Run 'gpg --list-secret-keys --keyid-format LONG' to find it."
         fi
     else
         log "Skipping GPG key generation. You can run 'gpg --full-generate-key' later."
@@ -333,12 +400,18 @@ setup_ssh_git() {
         cp "$SCRIPT_DIR/.gitconfig" "$HOME_DIR/.gitconfig"
     fi
 
+    # Set user info
+    git config --global user.name "$USER_NAME"
+    git config --global user.email "$USER_EMAIL"
+    log "Set git user: $USER_NAME <$USER_EMAIL>"
+
     # Set GPG program path dynamically (works across all platforms)
     GPG_PATH="$(which gpg)"
     if [ -n "$GPG_PATH" ]; then
         git config --global gpg.program "$GPG_PATH"
         log "Set gpg.program to: $GPG_PATH"
     fi
+
     if [ -f "$SCRIPT_DIR/ssh_config" ]; then
         cp "$SCRIPT_DIR/ssh_config" "$HOME_DIR/.ssh/config"
     fi
@@ -470,6 +543,7 @@ main() {
     log "Starting installation in tmpdir: $SCRIPT_DIR"
 
     detect_os
+    collect_user_info
     install_sys_packages
     install_python_tools
     setup_node
