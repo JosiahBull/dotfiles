@@ -332,6 +332,11 @@ setup_rust() {
         esac
     done
 
+    # Generate rustup and cargo completions before uninstalling
+    log "Generating rustup and cargo shell completions..."
+    rustup completions zsh > "$HOME_DIR/.zsh/completions/_rustup"
+    rustup completions zsh cargo > "$HOME_DIR/.zsh/completions/_cargo"
+
     # Clean up Rust
     log "Cleaning up Rust toolchain to save space..."
     cargo uninstall cargo-binstall || true
