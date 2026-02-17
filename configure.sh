@@ -156,6 +156,20 @@ install_sys_packages() {
         # Add pipx to path immediately for this session
         export PATH="$PATH:$HOME_DIR/Library/Python/3.9/bin"
 
+    elif command -v pacman &> /dev/null; then
+        log "Arch Linux detected..."
+        sudo pacman -Syu --noconfirm
+
+        # Install base packages
+        sudo pacman -S --noconfirm --needed python python-pip python-pipx zsh tmux curl git gnupg tar nano
+
+    elif command -v apk &> /dev/null; then
+        log "Alpine Linux detected..."
+        sudo apk update && sudo apk upgrade
+
+        # Install base packages (Alpine uses musl, some packages have different names)
+        sudo apk add python3 py3-pip py3-pipx zsh tmux curl git gnupg tar nano bash shadow
+
     elif [ -f /etc/rocky-release ] || command -v dnf &> /dev/null; then
         log "Rocky/Fedora detected..."
         sudo dnf update -y
@@ -172,7 +186,7 @@ install_sys_packages() {
         sudo apt-get update && sudo apt-get upgrade -y
         sudo apt-get install -y python3 python3-pip python3-venv pipx zsh tmux curl git gpg tar nano
     else
-        error "No supported package manager found."
+        error "No supported package manager found (supported: brew, pacman, apk, dnf, apt-get)."
     fi
 
     # Ensure pipx path is set for the script execution
