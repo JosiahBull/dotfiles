@@ -40,6 +40,7 @@ in
       zsh
       git
       gnupg
+      pinentry-curses
       curl
       tmux
       nano
