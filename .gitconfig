@@ -20,6 +20,8 @@
 	lg = log --oneline --graph --decorate -20
 	# Fetch latest main and rebase current branch onto it
 	rom = !git fetch origin main:main && git rebase main
+	# Amend and force push
+	gap = !git commit --amend --no-edit && git push --force-with-lease
 [safe]
 	directory = /workspace/*
 	directory = ~/personal/*
