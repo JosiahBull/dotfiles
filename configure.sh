@@ -134,7 +134,13 @@ collect_user_info() {
 
 detect_os() {
     case "$(uname -s)" in
-        Linux*)     OS="Linux";;
+        Linux*)
+            if [ -f /etc/NIXOS ]; then
+                OS="NixOS"
+            else
+                OS="Linux"
+            fi
+            ;;
         Darwin*)    OS="Mac";;
         *)          error "Unsupported OS: $(uname -s)" ;;
     esac
@@ -143,7 +149,12 @@ detect_os() {
 install_sys_packages() {
     log "Detected OS: $OS. Updating system and installing base dependencies..."
 
-    if [ "$OS" = "Mac" ]; then
+    if [ "$OS" = "NixOS" ]; then
+        log "NixOS detected — system packages are managed by Nix. Skipping."
+        ensure_dir "$LOCAL_BIN"
+        export PATH="$LOCAL_BIN:$PATH"
+        return
+    elif [ "$OS" = "Mac" ]; then
         if ! command -v brew &> /dev/null; then
             error "Homebrew is not installed. Please install it first (https://brew.sh/)."
         fi
@@ -200,6 +211,11 @@ install_sys_packages() {
 # ==============================================================================
 
 install_python_tools() {
+    if [ "$OS" = "NixOS" ]; then
+        log "NixOS detected — Python tools are managed by Nix. Skipping."
+        return
+    fi
+
     log "Installing Python tools via pipx..."
 
     # Check if pipx works, if not, warn.
@@ -215,6 +231,11 @@ install_python_tools() {
 # ==============================================================================
 
 setup_node() {
+    if [ "$OS" = "NixOS" ]; then
+        log "NixOS detected — Node.js is managed by Nix. Skipping."
+        return
+    fi
+
     log "Setting up Node.js (nvm), pnpm, and Claude CLI..."
 
     export NVM_DIR="$HOME_DIR/.nvm"
@@ -511,6 +532,11 @@ setup_ssh_key_sync() {
 # ==============================================================================
 
 setup_rust() {
+    if [ "$OS" = "NixOS" ]; then
+        log "NixOS detected — Rust tools are managed by Nix. Skipping."
+        return
+    fi
+
     log "Setting up Rust tooling..."
 
     ensure_dir "$LOCAL_BIN"
@@ -637,7 +663,9 @@ main() {
     setup_rust
 
     # Change Shell (skip in CI/non-interactive - requires PAM authentication)
-    if [ -z "$CI" ] && [ -t 0 ] && [ "$SHELL" != "$(which zsh)" ]; then
+    if [ "$OS" = "NixOS" ]; then
+        log "Skipping shell change (managed by NixOS configuration)."
+    elif [ -z "$CI" ] && [ -t 0 ] && [ "$SHELL" != "$(which zsh)" ]; then
         log "Changing shell to zsh..."
         chsh -s "$(which zsh)"
     elif [ -n "$CI" ] || [ ! -t 0 ]; then

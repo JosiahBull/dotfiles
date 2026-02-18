@@ -1,0 +1,92 @@
+name: nix-check
+
+on:
+  push:
+    paths:
+      - "flake.nix"
+      - "flake.lock"
+      - "nix/**"
+      - "configure.sh"
+      - ".github/workflows/nix-check.yml"
+  pull_request:
+    paths:
+      - "flake.nix"
+      - "flake.lock"
+      - "nix/**"
+      - "configure.sh"
+      - ".github/workflows/nix-check.yml"
+
+jobs:
+  flake-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency:
+      group: ${{ github.workflow }}-flake-${{ github.ref }}
+      cancel-in-progress: true
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: true
+    - uses: cachix/install-nix-action@v30
+      with:
+        nix_path: nixpkgs=channel:nixos-24.11
+    - run: nix flake check
+
+  # Verify configure.sh works on NixOS by simulating the NixOS environment.
+  # Creates /etc/NIXOS so configure.sh detects NixOS and skips package steps,
+  # then verifies dotfile linking still works correctly.
+  configure-nixos:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency:
+      group: ${{ github.workflow }}-configure-${{ github.ref }}
+      cancel-in-progress: true
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Simulate NixOS environment
+      run: sudo touch /etc/NIXOS
+
+    - name: Run configure.sh
+      run: ./configure.sh 2>&1 | tee install.log
+      env:
+        CI: "true"
+        SHELL: /bin/bash
+
+    - name: Upload install log
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: install-log-nixos-simulate
+        path: install.log
+        retention-days: 7
+
+    - name: Verify NixOS skips
+      run: |
+        echo "=== Checking NixOS-specific skips ==="
+        grep -q "NixOS detected — system packages are managed by Nix. Skipping." install.log \
+          && echo "✓ Skipped system package installation"
+        grep -q "NixOS detected — Python tools are managed by Nix. Skipping." install.log \
+          && echo "✓ Skipped Python tools"
+        grep -q "NixOS detected — Node.js is managed by Nix. Skipping." install.log \
+          && echo "✓ Skipped Node.js setup"
+        grep -q "NixOS detected — Rust tools are managed by Nix. Skipping." install.log \
+          && echo "✓ Skipped Rust setup"
+        grep -q "Skipping shell change (managed by NixOS configuration)." install.log \
+          && echo "✓ Skipped chsh"
+
+    - name: Verify dotfiles linked
+      run: |
+        echo "=== Checking dotfiles were linked ==="
+        test -e "$HOME/.zshrc" && echo "✓ .zshrc exists"
+        test -e "$HOME/.gitconfig" && echo "✓ .gitconfig exists"
+        test -d "$HOME/.oh-my-zsh" && echo "✓ .oh-my-zsh exists"
+        test -e "$HOME/.ssh/config" && echo "✓ .ssh/config exists"
+        test -f "$HOME/.ssh/id_ed25519" && echo "✓ SSH key generated"
+        test -d "$HOME/.zsh/completions" && echo "✓ completions dir exists"
+        test -f "$HOME/.local/bin/sync-ssh-keys" && echo "✓ sync-ssh-keys installed"
+        echo "=== All verifications passed ==="
