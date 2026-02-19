@@ -45,6 +45,7 @@ in
       tmux
       nano
       gnutar
+      bat
     ];
 
     # Enable zsh system-wide
