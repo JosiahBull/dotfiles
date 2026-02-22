@@ -1,0 +1,313 @@
+#!/usr/bin/env python3
+"""Discover all downstream Rust crates and TS packages affected by changes
+to a given backend app, following both Cargo dependencies and codegen bridges."""
+
+import argparse
+import json
+import logging
+import os
+import re
+import subprocess
+import sys
+import tomllib
+from pathlib import Path
+
+# --- Logging ---
+
+LOG_PREFIX = "[@partly/check-downstream]"
+
+
+class _ColorFormatter(logging.Formatter):
+    COLORS = {
+        logging.DEBUG: "\033[1;30m",
+        logging.INFO: "\033[1;36m",
+        logging.WARNING: "\033[1;33m",
+        logging.ERROR: "\033[1;31m",
+    }
+    RESET = "\033[0;37m"
+    # INFO_COMPLETE uses green — distinguished via a custom level
+    COMPLETE = 25
+
+    def format(self, record: logging.LogRecord) -> str:
+        color = self.COLORS.get(record.levelno, self.RESET)
+        return f"{color}{LOG_PREFIX} {record.getMessage()}{self.RESET}"
+
+
+# Custom level for green "complete" messages (between INFO=20 and WARNING=30)
+COMPLETE = 25
+logging.addLevelName(COMPLETE, "COMPLETE")
+_ColorFormatter.COLORS[COMPLETE] = "\033[1;32m"
+
+log = logging.getLogger("check-downstream")
+_handler = logging.StreamHandler(sys.stderr)
+_handler.setFormatter(_ColorFormatter())
+log.addHandler(_handler)
+log.setLevel(logging.DEBUG if os.environ.get("PIPELINE_SCRIPTS_DEBUG") == "true" else logging.INFO)
+
+
+def info_complete(msg: str) -> None:
+    log.log(COMPLETE, msg)
+
+
+def exit_error(msg: str) -> None:
+    log.error("Error: %s", msg)
+    sys.exit(1)
+
+
+# --- Repo check ---
+
+
+def check_repo() -> None:
+    try:
+        result = subprocess.run(
+            ["git", "remote", "-v"],
+            capture_output=True,
+            text=True,
+        )
+        if "thepartly/partly" not in result.stdout:
+            exit_error("This script must be run inside the thepartly/partly monorepo.")
+    except FileNotFoundError:
+        exit_error("git is not installed.")
+
+
+# --- Helpers ---
+
+APPS_PREFIX = Path("packages/backend/apps")
+IGNORED_TS_CLIENTS = {"@partly/repairer-server-client-reflect"}
+
+
+def crate_name_from_toml(toml_path: Path) -> str | None:
+    """Extract the [package] name from a Cargo.toml."""
+    try:
+        data = tomllib.loads(toml_path.read_text())
+        return data.get("package", {}).get("name")
+    except (OSError, tomllib.TOMLDecodeError):
+        return None
+
+
+def collect_crates_in_app_dir(root: Path, app_dir: Path) -> set[str]:
+    """Collect all Rust crate names from Cargo.toml files in an app directory."""
+    crates: set[str] = set()
+    for toml_path in [root / app_dir / "app" / "Cargo.toml", root / app_dir / "Cargo.toml"]:
+        if toml_path.is_file():
+            name = crate_name_from_toml(toml_path)
+            if name:
+                crates.add(name)
+    libs_dir = root / app_dir / "libs"
+    if libs_dir.is_dir():
+        for lib_dir in libs_dir.iterdir():
+            if lib_dir.is_dir():
+                toml_path = lib_dir / "Cargo.toml"
+                if toml_path.is_file():
+                    name = crate_name_from_toml(toml_path)
+                    if name:
+                        crates.add(name)
+    return crates
+
+
+def collect_client_crates_in_app_dir(root: Path, app_dir: Path) -> set[str]:
+    """Collect Rust client crate names from *client* dirs in an app's libs/."""
+    crates: set[str] = set()
+    libs_dir = root / app_dir / "libs"
+    if not libs_dir.is_dir():
+        return crates
+    for lib_dir in libs_dir.iterdir():
+        if lib_dir.is_dir() and "client" in lib_dir.name:
+            toml_path = lib_dir / "Cargo.toml"
+            if toml_path.is_file():
+                name = crate_name_from_toml(toml_path)
+                if name:
+                    crates.add(name)
+    return crates
+
+
+def collect_ts_clients_in_app_dir(root: Path, app_dir: Path) -> set[str]:
+    """Collect TS client package names from *client* dirs in an app's libs/."""
+    clients: set[str] = set()
+    libs_dir = root / app_dir / "libs"
+    if not libs_dir.is_dir():
+        return clients
+    for lib_dir in libs_dir.iterdir():
+        if lib_dir.is_dir() and "client" in lib_dir.name:
+            pkg_path = lib_dir / "package.json"
+            if pkg_path.is_file():
+                try:
+                    pkg_name = json.loads(pkg_path.read_text()).get("name")
+                    if pkg_name and pkg_name not in IGNORED_TS_CLIENTS:
+                        clients.add(pkg_name)
+                except (OSError, json.JSONDecodeError, KeyError):
+                    pass
+    return clients
+
+
+def cargo_tree_reverse(crate: str) -> str:
+    """Run `cargo tree -i <crate> --prefix=none` and return stdout."""
+    log.debug(f"  cargo tree -i {crate}")
+    result = subprocess.run(
+        ["cargo", "tree", "-i", crate, "--prefix=none"],
+        capture_output=True,
+        text=True,
+    )
+    return result.stdout
+
+
+# cargo tree --prefix=none line format:
+#   "crate-name v0.1.0 (/absolute/path/to/crate) (*)"
+_TREE_PATH_RE = re.compile(r"\((/[^)]+)\)")
+_TREE_NAME_RE = re.compile(r"^(\S+)\s+v")
+
+
+def parse_tree_line(line: str, root: str) -> tuple[str | None, Path | None]:
+    """Parse a cargo tree --prefix=none line.
+
+    Returns (crate_name, app_dir) where:
+    - crate_name is set only for workspace crates (path under root)
+    - app_dir is the packages/backend/apps/X relative path, or None
+    """
+    path_match = _TREE_PATH_RE.search(line)
+    if not path_match:
+        return None, None
+
+    abs_path = path_match.group(1)
+    if not abs_path.startswith(root + "/"):
+        return None, None
+
+    # Extract crate name
+    name_match = _TREE_NAME_RE.match(line)
+    crate_name = name_match.group(1) if name_match else None
+
+    # Extract app directory
+    rel_path = abs_path[len(root) + 1 :]
+    app_dir = None
+    if rel_path.startswith("packages/backend/apps/"):
+        parts = rel_path.split("/")
+        if len(parts) >= 4:
+            app_dir = Path("/".join(parts[:4]))
+
+    return crate_name, app_dir
+
+
+# --- Main ---
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Discover all downstream Rust crates and TS packages affected by "
+        "changes to the given app, following both Cargo dependencies and codegen bridges.",
+    )
+    parser.add_argument("app_name", metavar="app-name", help="Name of the backend app (e.g. tier1-writer, core-server)")
+    parser.add_argument("--run", action="store_true", help="Execute the generated check commands instead of printing them")
+    args = parser.parse_args()
+
+    check_repo()
+
+    root = Path.cwd()
+    root_str = str(root)
+    app_base = APPS_PREFIX / args.app_name
+    if not (root / app_base).is_dir():
+        exit_error(f"App directory not found: {app_base}")
+
+    source_app_prefix = f"{root / app_base}/"
+
+    # --- BFS: discover downstream crates and app directories ---
+    #
+    # For each source crate, `cargo tree -i` (unlimited depth) gives us every
+    # workspace crate that transitively depends on it — i.e. the exact set of
+    # crates that could break if the source crate changes.
+    #
+    # We collect those crate names directly for the output (no need for a
+    # separate forward-dep phase).  We also extract app directories so we can
+    # cross codegen bridges by discovering client crates in newly seen apps.
+
+    log.info(f"Discovering downstream dependencies for {args.app_name}...")
+
+    source_crates = collect_crates_in_app_dir(root, app_base)
+    all_crates: set[str] = set()
+    known_app_dirs: set[Path] = {app_base}
+    checked_crates: set[str] = set()
+    crates_to_check = set(source_crates)
+
+    for iteration in range(1, 11):
+        if not crates_to_check:
+            break
+
+        log.info(f"BFS iteration {iteration}: checking {len(crates_to_check)} crate(s)...")
+
+        new_app_dirs: set[Path] = set()
+        for crate in sorted(crates_to_check):
+            tree_output = cargo_tree_reverse(crate)
+            checked_crates.add(crate)
+
+            for line in tree_output.splitlines():
+                if not line.strip():
+                    continue
+                # Skip crates inside the source app — they are not downstream
+                if source_app_prefix in line:
+                    continue
+
+                crate_name, app_dir = parse_tree_line(line, root_str)
+                if crate_name:
+                    all_crates.add(crate_name)
+                if app_dir and app_dir not in known_app_dirs:
+                    new_app_dirs.add(app_dir)
+
+        if not new_app_dirs:
+            log.debug("  No new app dirs discovered, BFS complete")
+            break
+
+        log.info(f"  Found new app dirs: {' '.join(str(d) for d in sorted(new_app_dirs))}")
+        known_app_dirs.update(new_app_dirs)
+
+        # For next iteration: find client crates in the new app dirs that we haven't checked yet
+        crates_to_check = set()
+        for app_dir in new_app_dirs:
+            for cc in collect_client_crates_in_app_dir(root, app_dir):
+                if cc not in checked_crates:
+                    crates_to_check.add(cc)
+    else:
+        log.warning("BFS iteration limit reached, stopping")
+
+    # --- TS client packages ---
+
+    all_ts_clients: set[str] = set()
+    for app_dir in known_app_dirs:
+        all_ts_clients.update(collect_ts_clients_in_app_dir(root, app_dir))
+
+    # --- Build commands ---
+
+    sorted_crates = sorted(all_crates)
+    cargo_packages = " ".join(f"-p {c}" for c in sorted_crates)
+    cargo_cmd = f"cargo check --all-targets --all-features {cargo_packages}"
+
+    sorted_ts = sorted(all_ts_clients)
+    pnpm_filters = " ".join(f'--filter="{pkg}..."' for pkg in sorted_ts)
+    pnpm_cmd = f"pnpm {pnpm_filters} build" if pnpm_filters else ""
+
+    # --- Output ---
+
+    info_complete(f"Found {len(sorted_crates)} Rust crate(s) across {len(known_app_dirs)} app(s)")
+    if all_ts_clients:
+        info_complete(f"Found {len(all_ts_clients)} TS client package(s)")
+
+    print()
+
+    if args.run:
+        log.info("Running cargo check...")
+        result = subprocess.run(cargo_cmd, shell=True)
+        if result.returncode != 0:
+            exit_error("cargo check failed")
+        if pnpm_cmd:
+            log.info("Running pnpm build...")
+            result = subprocess.run(pnpm_cmd, shell=True)
+            if result.returncode != 0:
+                exit_error("pnpm build failed")
+        info_complete("All checks passed")
+    else:
+        print(cargo_cmd)
+        if pnpm_cmd:
+            print()
+            print(pnpm_cmd)
+
+
+if __name__ == "__main__":
+    main()

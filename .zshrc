@@ -50,7 +50,7 @@ setopt nocorrectall; setopt correct
 source "$DOTFILES_DIR/.zsh_aliases"
 
 # Scripts from dotfiles, then local bin
-export PATH="$DOTFILES_DIR/scripts:$HOME/.local/bin:$PATH"
+export PATH="$DOTFILES_DIR/scripts:$DOTFILES_DIR/scripts/partly:$HOME/.local/bin:$PATH"
 
 GPG_TTY="$(tty)"
 export GPG_TTY
