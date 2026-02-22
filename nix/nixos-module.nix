@@ -45,7 +45,18 @@ in
       tmux
       nano
       gnutar
+
+      # Rust CLI tools
       bat
+      cargo-autoinherit
+      cargo-deny
+      cargo-insta
+      cargo-mutants
+      cargo-semver-checks
+      cargo-tarpaulin
+      cargo-udeps
+      just
+      pre-commit
     ];
 
     # Enable zsh system-wide
