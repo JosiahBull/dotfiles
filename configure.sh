@@ -47,24 +47,26 @@ ensure_dir() {
     fi
 }
 
-# Create hardlink with symlink fallback (for files)
-link_file() {
-    local src="$1"
-    local dest="$2"
+# Create a local stub file that sources/includes dotfiles config.
+# Preserves existing file if it already sources dotfiles.
+create_stub() {
+    local dest="$1"
+    local content="$2"
+    local marker="$3"  # string to grep for to detect existing stub
 
-    # Ensure parent directory exists
     ensure_dir "$(dirname "$dest")"
 
-    # Remove existing file/link
-    rm -f "$dest"
-
-    # Try hardlink first, fall back to symlink (cross-filesystem)
-    if ln "$src" "$dest" 2>/dev/null; then
-        log "Hardlinked $dest"
-    else
-        ln -s "$src" "$dest"
-        log "Symlinked $dest (cross-filesystem)"
+    if [ -f "$dest" ]; then
+        if grep -qF "$marker" "$dest" 2>/dev/null; then
+            log "Stub $dest already configured."
+            return
+        fi
+        warn "$dest exists but doesn't source dotfiles. Backing up to ${dest}.bak"
+        cp "$dest" "${dest}.bak"
     fi
+
+    printf '%s\n' "$content" > "$dest"
+    log "Created stub $dest"
 }
 
 # Symlink for directories
@@ -287,12 +289,13 @@ setup_dotfiles() {
     # Create completions directory (ZSH only)
     ensure_dir "$HOME_DIR/.zsh/completions"
 
-    # Link .zshrc to home directory (must be at ~/.zshrc for zsh to find it)
-    if [ -f "$SCRIPT_DIR/.zshrc" ]; then
-        link_file "$SCRIPT_DIR/.zshrc" "$HOME_DIR/.zshrc"
-    else
-        warn ".zshrc not found in $SCRIPT_DIR. Skipping."
-    fi
+    # Create .zshrc stub that sources the shared dotfiles config
+    ZSHRC_STUB="# Source shared dotfiles configuration
+source \"\${DOTFILES_DIR:-\$HOME/.dotfiles}/.zshrc\"
+
+# Machine-specific overrides below"
+
+    create_stub "$HOME_DIR/.zshrc" "$ZSHRC_STUB" ".dotfiles/.zshrc"
 
     # Link Oh My Zsh directory
     if [ -d "$SCRIPT_DIR/ohmyzsh" ]; then
@@ -451,12 +454,13 @@ setup_ssh_git() {
     log "Configuring SSH and Git..."
     ensure_dir "$HOME_DIR/.ssh"
 
-    # Link gitconfig
-    if [ -f "$SCRIPT_DIR/.gitconfig" ]; then
-        link_file "$SCRIPT_DIR/.gitconfig" "$HOME_DIR/.gitconfig"
-    fi
+    # Create gitconfig stub (include shared config, local settings go after)
+    GITCONFIG_STUB="[include]
+	path = ~/.dotfiles/.gitconfig"
 
-    # Set user info (stored in git's global config, not the linked file)
+    create_stub "$HOME_DIR/.gitconfig" "$GITCONFIG_STUB" ".dotfiles/.gitconfig"
+
+    # Set user info (writes to local ~/.gitconfig, overriding shared defaults)
     git config --global user.name "$USER_NAME"
     git config --global user.email "$USER_EMAIL"
     log "Set git user: $USER_NAME <$USER_EMAIL>"
@@ -468,10 +472,12 @@ setup_ssh_git() {
         log "Set gpg.program to: $GPG_PATH"
     fi
 
-    # Link SSH config
-    if [ -f "$SCRIPT_DIR/ssh_config" ]; then
-        link_file "$SCRIPT_DIR/ssh_config" "$HOME_DIR/.ssh/config"
-    fi
+    # Create SSH config stub (Include must come before Host blocks)
+    SSHCONFIG_STUB="Include ~/.dotfiles/ssh_config
+
+# Machine-specific hosts below"
+
+    create_stub "$HOME_DIR/.ssh/config" "$SSHCONFIG_STUB" ".dotfiles/ssh_config"
 
     # Authorized keys from GitHub are handled by setup_ssh_key_sync() with deduplication
 
