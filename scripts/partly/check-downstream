@@ -6,10 +6,10 @@ import argparse
 import json
 import logging
 import os
-import re
 import subprocess
 import sys
 import tomllib
+from collections import deque
 from pathlib import Path
 
 # --- Logging ---
@@ -140,51 +140,92 @@ def collect_ts_clients_in_app_dir(root: Path, app_dir: Path) -> set[str]:
     return clients
 
 
-def cargo_tree_reverse(crate: str) -> str:
-    """Run `cargo tree -i <crate> --prefix=none` and return stdout."""
-    log.debug(f"  cargo tree -i {crate}")
+def load_workspace_graph(root: Path) -> tuple[dict[str, set[str]], dict[str, str]]:
+    """Load cargo metadata once and build a reverse dependency graph.
+
+    Returns:
+        reverse_deps: crate name -> set of workspace crate names that directly depend on it
+        crate_manifest_dirs: workspace crate name -> absolute directory containing Cargo.toml
+    """
+    log.info("Loading cargo metadata...")
     result = subprocess.run(
-        ["cargo", "tree", "-i", crate, "--prefix=none"],
+        ["cargo", "metadata", "--format-version", "1"],
         capture_output=True,
         text=True,
+        cwd=root,
     )
-    return result.stdout
+    if result.returncode != 0:
+        exit_error(f"cargo metadata failed: {result.stderr.strip()}")
+
+    meta = json.loads(result.stdout)
+    workspace_member_ids = set(meta.get("workspace_members", []))
+
+    # Map package ID -> (name, manifest_dir, is_workspace)
+    pkg_lookup: dict[str, tuple[str, str, bool]] = {}
+    crate_manifest_dirs: dict[str, str] = {}
+
+    for pkg in meta["packages"]:
+        manifest_path = pkg.get("manifest_path", "")
+        manifest_dir = str(Path(manifest_path).parent) if manifest_path else ""
+        is_ws = pkg["id"] in workspace_member_ids
+        pkg_lookup[pkg["id"]] = (pkg["name"], manifest_dir, is_ws)
+        if is_ws:
+            crate_manifest_dirs[pkg["name"]] = manifest_dir
+
+    # Build reverse dep graph: reverse_deps[dep] = {workspace crates that depend on dep}
+    reverse_deps: dict[str, set[str]] = {}
+
+    for node in meta["resolve"]["nodes"]:
+        parent_info = pkg_lookup.get(node["id"])
+        if not parent_info or not parent_info[2]:  # skip non-workspace parents
+            continue
+        parent_name = parent_info[0]
+        for dep in node["deps"]:
+            dep_info = pkg_lookup.get(dep["pkg"])
+            if not dep_info:
+                continue
+            dep_name = dep_info[0]
+            if dep_name not in reverse_deps:
+                reverse_deps[dep_name] = set()
+            reverse_deps[dep_name].add(parent_name)
+
+    return reverse_deps, crate_manifest_dirs
 
 
-# cargo tree --prefix=none line format:
-#   "crate-name v0.1.0 (/absolute/path/to/crate) (*)"
-_TREE_PATH_RE = re.compile(r"\((/[^)]+)\)")
-_TREE_NAME_RE = re.compile(r"^(\S+)\s+v")
+def find_transitive_reverse_deps(
+    reverse_deps: dict[str, set[str]],
+    start_crates: set[str],
+) -> set[str]:
+    """BFS to find all crates that transitively depend on any of the start crates.
 
-
-def parse_tree_line(line: str, root: str) -> tuple[str | None, Path | None]:
-    """Parse a cargo tree --prefix=none line.
-
-    Returns (crate_name, app_dir) where:
-    - crate_name is set only for workspace crates (path under root)
-    - app_dir is the packages/backend/apps/X relative path, or None
+    Returns the full set of visited crates including the start crates themselves.
     """
-    path_match = _TREE_PATH_RE.search(line)
-    if not path_match:
-        return None, None
+    visited: set[str] = set()
+    queue = deque(start_crates)
 
-    abs_path = path_match.group(1)
-    if not abs_path.startswith(root + "/"):
-        return None, None
+    while queue:
+        crate = queue.popleft()
+        if crate in visited:
+            continue
+        visited.add(crate)
+        for rdep in reverse_deps.get(crate, ()):
+            if rdep not in visited:
+                queue.append(rdep)
 
-    # Extract crate name
-    name_match = _TREE_NAME_RE.match(line)
-    crate_name = name_match.group(1) if name_match else None
+    return visited
 
-    # Extract app directory
-    rel_path = abs_path[len(root) + 1 :]
-    app_dir = None
-    if rel_path.startswith("packages/backend/apps/"):
-        parts = rel_path.split("/")
+
+def app_dir_for_manifest(manifest_dir: str, root_str: str) -> Path | None:
+    """Extract the packages/backend/apps/X relative path from a manifest directory."""
+    prefix = root_str + "/"
+    if not manifest_dir.startswith(prefix):
+        return None
+    rel = manifest_dir[len(prefix):]
+    if rel.startswith("packages/backend/apps/"):
+        parts = rel.split("/")
         if len(parts) >= 4:
-            app_dir = Path("/".join(parts[:4]))
-
-    return crate_name, app_dir
+            return Path("/".join(parts[:4]))
+    return None
 
 
 # --- Main ---
@@ -207,19 +248,18 @@ def main() -> None:
     if not (root / app_base).is_dir():
         exit_error(f"App directory not found: {app_base}")
 
-    source_app_prefix = f"{root / app_base}/"
-
-    # --- BFS: discover downstream crates and app directories ---
-    #
-    # For each source crate, `cargo tree -i` (unlimited depth) gives us every
-    # workspace crate that transitively depends on it — i.e. the exact set of
-    # crates that could break if the source crate changes.
-    #
-    # We collect those crate names directly for the output (no need for a
-    # separate forward-dep phase).  We also extract app directories so we can
-    # cross codegen bridges by discovering client crates in newly seen apps.
-
     log.info(f"Discovering downstream dependencies for {args.app_name}...")
+
+    # Load the full workspace dependency graph once (replaces N sequential
+    # cargo tree -i calls with a single cargo metadata invocation).
+    reverse_deps, crate_manifest_dirs = load_workspace_graph(root)
+
+    # Identify source app crates (to exclude from downstream results)
+    source_app_prefix = str(root / app_base) + "/"
+    source_app_crate_names = {
+        name for name, mdir in crate_manifest_dirs.items()
+        if mdir.startswith(source_app_prefix)
+    }
 
     source_crates = collect_crates_in_app_dir(root, app_base)
     all_crates: set[str] = set()
@@ -233,23 +273,21 @@ def main() -> None:
 
         log.info(f"BFS iteration {iteration}: checking {len(crates_to_check)} crate(s)...")
 
+        # In-memory BFS over the reverse dep graph (instant vs seconds per crate)
+        all_rdeps = find_transitive_reverse_deps(reverse_deps, crates_to_check)
+        checked_crates.update(crates_to_check)
+
+        # Exclude source app crates — they are not downstream
+        new_crates = all_rdeps - source_app_crate_names
+        all_crates.update(new_crates)
+
+        # Discover new app directories from reverse deps
         new_app_dirs: set[Path] = set()
-        for crate in sorted(crates_to_check):
-            tree_output = cargo_tree_reverse(crate)
-            checked_crates.add(crate)
-
-            for line in tree_output.splitlines():
-                if not line.strip():
-                    continue
-                # Skip crates inside the source app — they are not downstream
-                if source_app_prefix in line:
-                    continue
-
-                crate_name, app_dir = parse_tree_line(line, root_str)
-                if crate_name:
-                    all_crates.add(crate_name)
-                if app_dir and app_dir not in known_app_dirs:
-                    new_app_dirs.add(app_dir)
+        for crate_name in new_crates:
+            mdir = crate_manifest_dirs.get(crate_name, "")
+            adir = app_dir_for_manifest(mdir, root_str)
+            if adir and adir not in known_app_dirs:
+                new_app_dirs.add(adir)
 
         if not new_app_dirs:
             log.debug("  No new app dirs discovered, BFS complete")
