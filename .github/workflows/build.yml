@@ -147,6 +147,7 @@ jobs:
           just docker-push x86_64
 
   create_manifest:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: [build_arm64, build_amd64]
     permissions:
       contents: read
