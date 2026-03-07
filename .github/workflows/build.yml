@@ -27,7 +27,7 @@ jobs:
       cancel-in-progress: true
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: docker/setup-buildx-action@v4
       - uses: taiki-e/install-action@just
       - name: Log in to the Container registry
@@ -58,7 +58,7 @@ jobs:
       cancel-in-progress: true
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: docker/setup-buildx-action@v4
       - uses: taiki-e/install-action@just
       - name: Log in to the Container registry
@@ -161,7 +161,7 @@ jobs:
       cancel-in-progress: true
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: taiki-e/install-action@just
       - name: Log in to the Container registry
         uses: docker/login-action@v4
