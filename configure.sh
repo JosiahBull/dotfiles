@@ -165,6 +165,7 @@ install_sys_packages() {
 
         # Install Python, Pipx, and Utils
         brew install python pipx zsh tmux curl git gnupg pinentry-mac nano
+        brew install --cask ghostty
 
         # Add pipx to path immediately for this session
         export PATH="$PATH:$HOME_DIR/Library/Python/3.9/bin"
