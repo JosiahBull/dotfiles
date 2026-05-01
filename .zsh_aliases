@@ -9,7 +9,9 @@ alias rsync-update="rsync -avzu --progress -h"
 alias rsync-synchronize="rsync -avzu --delete --progress -h"
 alias e='exit 0'
 alias E='e'
-alias cat='bat'
+if command -v bat >/dev/null 2>&1; then
+    alias cat='bat'
+fi
 alias upgrade-all='update-all'
 alias load_env='. do_load_env'
 alias docker-compose='docker compose'
