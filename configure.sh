@@ -65,7 +65,8 @@ create_stub() {
         cp "$dest" "${dest}.bak"
     fi
 
-    printf '%s\n' "$content" > "$dest"
+    # `>|` overrides `set -o noclobber` so we can replace the backed-up file.
+    printf '%s\n' "$content" >| "$dest"
     log "Created stub $dest"
 }
 
@@ -641,6 +642,134 @@ setup_rust() {
 }
 
 # ==============================================================================
+# FIREFOX LINK ROUTER
+# ==============================================================================
+
+# Create a Firefox profile at Profiles/<label> if it doesn't already exist.
+# Firefox's -CreateProfile takes a single "<name> <dir>" string and splits on
+# the first space, so the spaces in the "Application Support" path are fine as
+# long as <label> itself has none. Guarding on the directory keeps this
+# idempotent and never disturbs a profile that's already there.
+ensure_ff_profile() {
+    local label="$1"
+    local ff_bin="$2"
+    local dir="$3/$label"
+
+    if [ -d "$dir" ]; then
+        log "Firefox profile '$label' already exists."
+        return
+    fi
+
+    log "Creating Firefox profile '$label' at $dir..."
+    "$ff_bin" -CreateProfile "$label $dir" > /dev/null 2>&1 \
+        || warn "Could not create Firefox profile '$label'."
+}
+
+# Install firefox-link-router (https://github.com/josiahbull/ff-router): a
+# macOS-only "default browser" that opens each link in the right Firefox
+# profile. It has no meaning on other systems (there is no LaunchServices
+# default-browser to take over), so elsewhere we only note that it exists.
+setup_ff_router() {
+    if [ "$OS" != "Mac" ]; then
+        warn "Not installing firefox-link-router: it is macOS-only."
+        warn "  It could be installed here if you want per-profile link routing —"
+        warn "  see https://github.com/josiahbull/ff-router."
+        return
+    fi
+
+    # It drives a GUI (Firefox and the macOS default-browser prompt); there is
+    # nothing to do in a headless/CI run.
+    if [ -n "$CI" ] || [ ! -t 0 ]; then
+        log "Skipping firefox-link-router (non-interactive/CI)."
+        return
+    fi
+
+    log "Setting up firefox-link-router..."
+
+    local ff_app="/Applications/Firefox.app"
+    local ff_bin="$ff_app/Contents/MacOS/firefox"
+    local profiles_dir="$HOME_DIR/Library/Application Support/Firefox/Profiles"
+    local shared_config="$SCRIPT_DIR/.ff-router.toml"
+    local config_dest="$HOME_DIR/.ff-router.toml"
+
+    # ff-router routes to Firefox profiles, so Firefox itself is a prerequisite.
+    if [ ! -d "$ff_app" ]; then
+        log "Installing Firefox (required by firefox-link-router)..."
+        if ! brew install --cask firefox; then
+            warn "Could not install Firefox; skipping firefox-link-router."
+            return
+        fi
+    fi
+
+    # Create the profiles the config routes to, if they aren't set up already.
+    ensure_dir "$profiles_dir"
+    ensure_ff_profile "home" "$ff_bin" "$profiles_dir"
+    ensure_ff_profile "work" "$ff_bin" "$profiles_dir"
+    ensure_ff_profile "default" "$ff_bin" "$profiles_dir"
+
+    # Install a local stub that pulls in the shared config via `extends`. The
+    # shared file ($shared_config) lives in this repo, so general updates are
+    # made there, committed, and pulled on every machine; per-machine tweaks go
+    # in the stub below the extends line and are never committed. create_stub
+    # only writes when the file isn't already a stub (backing up a pre-existing
+    # real config), so local overrides survive re-runs — same pattern as the
+    # .gitconfig / ssh_config stubs above.
+    if [ -f "$shared_config" ]; then
+        FFROUTER_STUB="# firefox-link-router config (local, per-machine, untracked).
+# Shared defaults come from the dotfiles repo via \`extends\`; edit
+# ~/.dotfiles/.ff-router.toml for changes you want on every machine, commit,
+# and pull. Put machine-specific overrides below the extends line.
+extends = \"~/.dotfiles/.ff-router.toml\"
+
+# Machine-specific overrides below (optional), e.g.:
+# [[rule]]
+# profile = \"work\"
+# globs = [\"*://*.internal.example/*\"]"
+
+        create_stub "$config_dest" "$FFROUTER_STUB" ".dotfiles/.ff-router.toml"
+    else
+        warn "Shared ff-router config missing at $shared_config; leaving ~/.ff-router.toml as-is."
+    fi
+
+    # Obtain the installer, then run it non-interactively. It downloads the
+    # matching ff-router release binary, assembles "Firefox Router.app" into
+    # ~/Applications, registers it with Launch Services, installs the login
+    # LaunchAgent, and asks macOS to make it the default browser (a GUI prompt
+    # you must accept).
+    #
+    # Note: both --non-interactive and the `extends` merge in the stub above need
+    # an ff-router *release* that includes them. Until then, test from a local
+    # checkout: build the installer (cargo build -p ff-router-installer --release)
+    # and point FF_ROUTER_INSTALLER at it, and build the router (cargo build -p
+    # ff-router --release) and point FF_ROUTER_BIN at that binary so the
+    # installer bundles it instead of downloading. An old binary ignores
+    # `extends` and would route every link to Firefox's default profile.
+    local installer="${FF_ROUTER_INSTALLER:-}"
+    local tmp=""
+    if [ -z "$installer" ]; then
+        tmp="$(mktemp -d)"
+        installer="$tmp/ff-router-installer"
+        log "Downloading ff-router installer..."
+        if ! curl -fsSL --retry 3 -o "$installer" \
+            "https://github.com/josiahbull/ff-router/releases/latest/download/ff-router-installer"; then
+            warn "Could not download the ff-router installer; skipping app install."
+            rm -rf "$tmp"
+            return
+        fi
+        chmod +x "$installer"
+    fi
+
+    log "Installing Firefox Router.app (non-interactive)..."
+    if ! "$installer" --non-interactive; then
+        warn "ff-router install failed. If it reported that an interactive terminal is"
+        warn "required, the published release predates --non-interactive: build the"
+        warn "installer from source and set FF_ROUTER_INSTALLER, or cut a new release."
+    fi
+
+    [ -n "$tmp" ] && rm -rf "$tmp"
+}
+
+# ==============================================================================
 # MAIN EXECUTION
 # ==============================================================================
 
@@ -668,6 +797,7 @@ main() {
     setup_ssh_git
     setup_ssh_key_sync
     setup_rust
+    setup_ff_router
 
     # Change Shell (skip in CI/non-interactive - requires PAM authentication)
     if [ "$OS" = "NixOS" ]; then

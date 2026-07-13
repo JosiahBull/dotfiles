@@ -1,0 +1,33 @@
+# firefox-link-router config — installed to ~/.ff-router.toml by configure.sh.
+#
+# firefox-link-router (https://github.com/josiahbull/ff-router) is a macOS-only
+# "default browser" shim: each clicked link opens in the Firefox profile whose
+# rule matches. Profile labels map to Firefox profile directories under
+# ~/Library/Application Support/Firefox/Profiles/; configure.sh creates the
+# "home", "work", and "default" profiles (bare names resolve to those dirs), so
+# this config is portable across machines. See the repo README for the full
+# reference (globs, source rules, debug logging).
+
+debug = false
+default = "home"
+
+[profiles]
+home    = "home"      # personal / everything that doesn't match a rule
+work    = "work"      # work accounts (Partly, etc.)
+default = "default"   # low-trust / distraction sites, kept separate
+
+[[rule]]
+profile = "work"
+globs = [
+    "*{partly,loom,retool,gitlab,sentry}.{com,pro,io}*",
+    "*github.com/thepartly*",
+    "*datastudio.google.com*",
+    "*ashbyhq.com*",
+]
+
+[[rule]]
+profile = "default"
+globs = [
+    "*{reddit,imgur,youtube,twitch}.com*",
+    "*github.com/josiahbull*",
+]
