@@ -68,6 +68,7 @@ in
     # Systemd timer for SSH key sync (replaces cron)
     systemd.services."dotfiles-ssh-key-sync" = lib.mkIf cfg.sshKeySync.enable {
       description = "Sync SSH authorized_keys from GitHub";
+      path = [ pkgs.curl pkgs.diffutils ];
       serviceConfig = {
         Type = "oneshot";
         User = cfg.user;

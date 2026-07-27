@@ -61,3 +61,5 @@ fi
 
 export NODE_OPTIONS="--max-old-space-size=8192 --no-deprecation"
 export CLAUDE_CODE_MAX_OUTPUT_TOKENS=64000
+
+eval "$(direnv hook zsh)"
