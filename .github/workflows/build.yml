@@ -19,9 +19,9 @@ jobs:
       contents: read
       packages: write
       id-token: write
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
 
-    timeout-minutes: 180 # arm takes significantly longer with emulation
+    timeout-minutes: 60
     concurrency:
       group: ${{ github.workflow }}-build-arm64-${{ github.ref }}
       cancel-in-progress: true
