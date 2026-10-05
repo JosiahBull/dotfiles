@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+
+# Stop running containers whose names do not contain devbox.
+docker ps --format '{{.ID}} {{.Names}}' | grep -v 'devbox' | awk '{print $1}' | xargs -r docker kill
