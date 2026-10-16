@@ -196,7 +196,12 @@ install_sys_packages() {
             sudo /usr/bin/crb enable
         fi
 
-        sudo dnf install -y python3-pip pipx zsh tmux curl git gpg tar nano
+        # Rocky's base image includes curl-minimal, which conflicts with curl
+        # but already supports the HTTPS downloads used by this script.
+        if ! command -v curl &> /dev/null; then
+            sudo dnf install -y curl
+        fi
+        sudo dnf install -y python3-pip pipx zsh tmux git gpg tar nano
 
     elif command -v apt-get &> /dev/null; then
         log "Debian/Ubuntu detected..."
