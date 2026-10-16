@@ -10,12 +10,16 @@ set -o errexit -o pipefail -o noclobber -o nounset
 
 current_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$current_dir"/functions.sh
+source "$current_dir"/lib/release-apps.sh
 
 set_log "update-all"
 
 # Update System
 # Ubuntu
-if [ -f /etc/lsb-release ]; then
+if [ "$(uname -s)" = Darwin ]; then
+  run_cmd_wrap brew update
+  run_cmd_wrap brew upgrade
+elif [ -f /etc/lsb-release ]; then
   cmd=("sudo" "apt-get" "update")
   run_cmd_wrap "${cmd[@]}"
   cmd=("sudo" "apt-get" "upgrade" "-y")
@@ -40,6 +44,9 @@ else
   exit_error "Unsupported distribution"
 fi
 
+# Update installed personal applications from their latest GitHub releases.
+update_personal_apps
+
 # Update device firmware
 if [ -f /usr/bin/fwupdmgr ]; then
   cmd=("sudo" "fwupdmgr" "refresh" "--force")
@@ -63,7 +70,10 @@ if which flatpak &> /dev/null; then
 fi
 
 # Update Pip if not externally managed, by checking if /usr/lib/python3.12/EXTERNALLY-MANAGED exists
-externally_managed_exists=$(find /usr/lib/ -type f -name "EXTERNALLY-MANAGED" | wc -l)
+externally_managed_exists=1
+if [ "$(uname -s)" != Darwin ]; then
+  externally_managed_exists=$(find /usr/lib/ -type f -name "EXTERNALLY-MANAGED" | wc -l)
+fi
 if [ "$externally_managed_exists" -eq 0 ]; then
   cmd=("pip" "install" "--upgrade" "pip")
   run_cmd_wrap "${cmd[@]}"
@@ -75,8 +85,10 @@ fi
 if which rustup &> /dev/null; then
   cmd=("rustup" "update")
   run_cmd_wrap "${cmd[@]}"
-  cmd=("cargo" "install-update" "-a")
-  run_cmd_wrap "${cmd[@]}"
+  if command -v cargo-install-update &> /dev/null; then
+    cmd=("cargo" "install-update" "-a")
+    run_cmd_wrap "${cmd[@]}"
+  fi
 fi
 
 # Update NPM Packages

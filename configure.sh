@@ -13,6 +13,8 @@ DOTFILES_DIR="${DOTFILES_DIR:-$HOME/.dotfiles}"
 HOME_DIR="$HOME"
 LOCAL_BIN="$HOME_DIR/.local/bin"
 
+source "$SCRIPT_DIR/scripts/lib/release-apps.sh"
+
 # Colors for logging
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -642,6 +644,20 @@ setup_rust() {
 }
 
 # ==============================================================================
+# DISK SAVER
+# ==============================================================================
+
+setup_disk_saver() {
+    if [ "$OS" = "NixOS" ]; then
+        log "Skipping disk-saver (managed by Nix)."
+        return
+    fi
+
+    install_disk_saver "$LOCAL_BIN/disk-saver"
+    log "disk-saver installed. Run 'disk-saver config init' to configure it, then 'disk-saver schedule install' to enable cleanup."
+}
+
+# ==============================================================================
 # FIREFOX LINK ROUTER
 # ==============================================================================
 
@@ -677,10 +693,9 @@ setup_ff_router() {
         return
     fi
 
-    # It drives a GUI (Firefox and the macOS default-browser prompt); there is
-    # nothing to do in a headless/CI run.
-    if [ -n "$CI" ] || [ ! -t 0 ]; then
-        log "Skipping firefox-link-router (non-interactive/CI)."
+    # The installer supports piped setup; only CI should skip GUI registration.
+    if [ -n "$CI" ]; then
+        log "Skipping firefox-link-router (CI)."
         return
     fi
 
@@ -696,8 +711,7 @@ setup_ff_router() {
     if [ ! -d "$ff_app" ]; then
         log "Installing Firefox (required by firefox-link-router)..."
         if ! brew install --cask firefox; then
-            warn "Could not install Firefox; skipping firefox-link-router."
-            return
+            error "Could not install Firefox (required by firefox-link-router)."
         fi
     fi
 
@@ -737,36 +751,9 @@ extends = \"~/.dotfiles/.ff-router.toml\"
     # LaunchAgent, and asks macOS to make it the default browser (a GUI prompt
     # you must accept).
     #
-    # Note: both --non-interactive and the `extends` merge in the stub above need
-    # an ff-router *release* that includes them. Until then, test from a local
-    # checkout: build the installer (cargo build -p ff-router-installer --release)
-    # and point FF_ROUTER_INSTALLER at it, and build the router (cargo build -p
-    # ff-router --release) and point FF_ROUTER_BIN at that binary so the
-    # installer bundles it instead of downloading. An old binary ignores
-    # `extends` and would route every link to Firefox's default profile.
-    local installer="${FF_ROUTER_INSTALLER:-}"
-    local tmp=""
-    if [ -z "$installer" ]; then
-        tmp="$(mktemp -d)"
-        installer="$tmp/ff-router-installer"
-        log "Downloading ff-router installer..."
-        if ! curl -fsSL --retry 3 -o "$installer" \
-            "https://github.com/josiahbull/ff-router/releases/latest/download/ff-router-installer"; then
-            warn "Could not download the ff-router installer; skipping app install."
-            rm -rf "$tmp"
-            return
-        fi
-        chmod +x "$installer"
-    fi
+    # FF_ROUTER_INSTALLER and FF_ROUTER_BIN can select local development builds.
+    install_ff_router
 
-    log "Installing Firefox Router.app (non-interactive)..."
-    if ! "$installer" --non-interactive; then
-        warn "ff-router install failed. If it reported that an interactive terminal is"
-        warn "required, the published release predates --non-interactive: build the"
-        warn "installer from source and set FF_ROUTER_INSTALLER, or cut a new release."
-    fi
-
-    [ -n "$tmp" ] && rm -rf "$tmp"
 }
 
 # ==============================================================================
@@ -797,6 +784,7 @@ main() {
     setup_ssh_git
     setup_ssh_key_sync
     setup_rust
+    setup_disk_saver
     setup_ff_router
 
     # Change Shell (skip in CI/non-interactive - requires PAM authentication)

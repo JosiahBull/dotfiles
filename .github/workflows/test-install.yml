@@ -21,6 +21,7 @@ on:
     paths:
       - "install.sh"
       - "configure.sh"
+      - "scripts/lib/release-apps.sh"
       - ".github/workflows/test-install.yml"
   push:
     branches:
@@ -28,6 +29,7 @@ on:
     paths:
       - "install.sh"
       - "configure.sh"
+      - "scripts/lib/release-apps.sh"
       - ".github/workflows/test-install.yml"
 
 env:
