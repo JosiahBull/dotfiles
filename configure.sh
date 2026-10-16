@@ -169,7 +169,10 @@ install_sys_packages() {
         brew update
 
         # Install Python, Pipx, and Utils
-        brew install python pipx zsh tmux curl git gnupg pinentry-mac nano
+        # Reuse installed formulae; brew install otherwise upgrades them and
+        # their dependents, which can trigger lengthy source builds on macOS 14.
+        HOMEBREW_NO_INSTALL_UPGRADE=1 HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK=1 \
+            brew install python pipx zsh tmux curl git gnupg pinentry-mac nano
         brew install --cask ghostty
 
         # Add pipx to path immediately for this session
