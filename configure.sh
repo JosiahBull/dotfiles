@@ -271,10 +271,11 @@ setup_node() {
     log "Installing latest LTS Node.js..."
     nvm install --lts
     nvm use --lts
+    nvm alias default 'lts/*'
 
     # 4. Install Global Tools
     log "Installing global npm packages: pnpm..."
-    npm install -g pnpm
+    npm install -g --allow-scripts=pnpm pnpm
 
     # 5. Install Claude Code (skip in CI - external dependency)
     if [ -n "$CI" ]; then
@@ -605,8 +606,15 @@ setup_rust() {
 
         log "Installing Rust tool: $PACKAGE..."
 
-        # Install
-        cargo binstall --no-confirm "$PACKAGE"
+        # cargo-mutants' GNU release requires a newer glibc than Ubuntu 22.04
+        # and Rocky 9. Use its static musl build on Linux.
+        if [ "$PACKAGE" = "cargo-mutants" ] && [ "$OS" = "Linux" ]; then
+            local rust_host
+            rust_host="$(rustc -vV | sed -n 's/^host: //p')"
+            cargo binstall --no-confirm --targets "${rust_host/-gnu/-musl}" "$PACKAGE"
+        else
+            cargo binstall --no-confirm "$PACKAGE"
+        fi
 
         # Move binary to local bin to survive rustup uninstall
         if [ -f "$HOME_DIR/.cargo/bin/$BINARY" ]; then
