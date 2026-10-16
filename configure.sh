@@ -201,7 +201,7 @@ install_sys_packages() {
         if ! command -v curl &> /dev/null; then
             sudo dnf install -y curl
         fi
-        sudo dnf install -y python3-pip pipx zsh tmux git gpg tar nano
+        sudo dnf install -y python3-pip pipx zsh tmux git gpg tar nano openssh-clients
 
     elif command -v apt-get &> /dev/null; then
         log "Debian/Ubuntu detected..."
@@ -356,7 +356,7 @@ setup_gpg() {
         log "Setting up GPG for macOS with pinentry-mac..."
 
         # Configure gpg-agent to use pinentry-mac
-        PINENTRY_PATH="$(which pinentry-mac)"
+        PINENTRY_PATH="$(command -v pinentry-mac)"
         if [ -n "$PINENTRY_PATH" ]; then
             echo "pinentry-program $PINENTRY_PATH" > "$HOME_DIR/.gnupg/gpg-agent.conf"
             log "Configured pinentry-mac at: $PINENTRY_PATH"
@@ -476,7 +476,7 @@ setup_ssh_git() {
     log "Set git user: $USER_NAME <$USER_EMAIL>"
 
     # Set GPG program path dynamically (works across all platforms)
-    GPG_PATH="$(which gpg)"
+    GPG_PATH="$(command -v gpg)"
     if [ -n "$GPG_PATH" ]; then
         git config --global gpg.program "$GPG_PATH"
         log "Set gpg.program to: $GPG_PATH"
@@ -803,9 +803,9 @@ main() {
     # Change Shell (skip in CI/non-interactive - requires PAM authentication)
     if [ "$OS" = "NixOS" ]; then
         log "Skipping shell change (managed by NixOS configuration)."
-    elif [ -z "$CI" ] && [ -t 0 ] && [ "$SHELL" != "$(which zsh)" ]; then
+    elif [ -z "$CI" ] && [ -t 0 ] && [ "$SHELL" != "$(command -v zsh)" ]; then
         log "Changing shell to zsh..."
-        chsh -s "$(which zsh)"
+        chsh -s "$(command -v zsh)"
     elif [ -n "$CI" ] || [ ! -t 0 ]; then
         log "Skipping shell change (non-interactive mode)."
     fi
