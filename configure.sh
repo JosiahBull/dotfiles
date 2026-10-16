@@ -163,10 +163,10 @@ install_sys_packages() {
         if ! command -v brew &> /dev/null; then
             error "Homebrew is not installed. Please install it first (https://brew.sh/)."
         fi
-        # Full system upgrades belong to update-all. Upgrading every preinstalled
-        # formula here can rebuild unrelated tools from source on older macOS.
-        log "Updating Homebrew package definitions..."
-        brew update
+        # Updates and formula migrations belong to update-all. Even brew update
+        # can rebuild unrelated installed tools when a formula moves to a cask.
+        export HOMEBREW_NO_AUTO_UPDATE=1
+        log "Installing required Homebrew packages (use update-all for upgrades)..."
 
         # Install Python, Pipx, and Utils
         # Reuse installed formulae; brew install otherwise upgrades them and
