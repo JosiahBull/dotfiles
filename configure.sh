@@ -171,8 +171,13 @@ install_sys_packages() {
         # Install Python, Pipx, and Utils
         # Reuse installed formulae; brew install otherwise upgrades them and
         # their dependents, which can trigger lengthy source builds on macOS 14.
+        local brew_packages=(python pipx zsh tmux git gnupg pinentry-mac nano)
+        # macOS already ships curl with the HTTPS support needed here.
+        if ! command -v curl &> /dev/null; then
+            brew_packages+=(curl)
+        fi
         HOMEBREW_NO_INSTALL_UPGRADE=1 HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK=1 \
-            brew install python pipx zsh tmux curl git gnupg pinentry-mac nano
+            brew install "${brew_packages[@]}"
         brew install --cask ghostty
 
         # Add pipx to path immediately for this session
