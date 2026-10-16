@@ -163,8 +163,10 @@ install_sys_packages() {
         if ! command -v brew &> /dev/null; then
             error "Homebrew is not installed. Please install it first (https://brew.sh/)."
         fi
-        log "Updating Homebrew..."
-        brew update && brew upgrade
+        # Full system upgrades belong to update-all. Upgrading every preinstalled
+        # formula here can rebuild unrelated tools from source on older macOS.
+        log "Updating Homebrew package definitions..."
+        brew update
 
         # Install Python, Pipx, and Utils
         brew install python pipx zsh tmux curl git gnupg pinentry-mac nano
