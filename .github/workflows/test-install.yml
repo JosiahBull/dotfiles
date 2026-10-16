@@ -35,6 +35,9 @@ on:
 env:
   # Skip interactive prompts
   DEBIAN_FRONTEND: noninteractive
+  # Binstall uses authenticated GitHub requests rather than the shared runner's
+  # low anonymous API limit when resolving release assets.
+  GH_TOKEN: ${{ github.token }}
 
 defaults:
   run:
@@ -275,7 +278,7 @@ jobs:
           dnf install -y sudo
           echo "testuser ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
 
-          su - testuser -c "set -eo pipefail; cd '$GITHUB_WORKSPACE' && CI=true ./configure.sh 2>&1 | tee /home/testuser/install.log"
+          su --whitelist-environment=GH_TOKEN --login testuser -c "set -eo pipefail; cd '$GITHUB_WORKSPACE' && CI=true ./configure.sh 2>&1 | tee /home/testuser/install.log"
           cp /home/testuser/install.log ./install.log
         env:
           CI: true

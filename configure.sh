@@ -611,7 +611,16 @@ setup_rust() {
         if [ "$PACKAGE" = "cargo-mutants" ] && [ "$OS" = "Linux" ]; then
             local rust_host
             rust_host="$(rustc -vV | sed -n 's/^host: //p')"
-            cargo binstall --no-confirm --targets "${rust_host/-gnu/-musl}" "$PACKAGE"
+            local attempt
+            for attempt in 1 2 3; do
+                if cargo binstall --no-confirm --targets "${rust_host/-gnu/-musl}" \
+                    --disable-strategies compile --maximum-resolution-timeout 90 "$PACKAGE"; then
+                    break
+                fi
+                [ "$attempt" -lt 3 ] || error "Could not download $PACKAGE after three attempts."
+                warn "Retrying $PACKAGE download..."
+                sleep 5
+            done
         else
             cargo binstall --no-confirm "$PACKAGE"
         fi
