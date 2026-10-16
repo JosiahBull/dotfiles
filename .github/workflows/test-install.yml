@@ -36,6 +36,10 @@ env:
   # Skip interactive prompts
   DEBIAN_FRONTEND: noninteractive
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
   test-ubuntu:
     if: github.event_name != 'workflow_dispatch' || github.event.inputs.os == 'all' || startsWith(github.event.inputs.os, 'ubuntu')
@@ -78,43 +82,65 @@ jobs:
           echo "=== Verifying installed tools ==="
 
           echo "Checking zsh config (linked from dotfiles)..."
-          test -f "$HOME/.zshrc" && echo "✓ .zshrc exists"
-          test -L "$HOME/.oh-my-zsh" && echo "✓ .oh-my-zsh is symlinked"
+          test -f "$HOME/.zshrc"
+          echo "✓ .zshrc exists"
+          test -L "$HOME/.oh-my-zsh"
+          echo "✓ .oh-my-zsh is symlinked"
 
           echo "Checking oh-my-zsh..."
-          test -d "$HOME/.oh-my-zsh" && echo "✓ oh-my-zsh installed"
+          test -d "$HOME/.oh-my-zsh"
+          echo "✓ oh-my-zsh installed"
 
           echo "Checking Node.js..."
           export NVM_DIR="$HOME/.nvm"
           [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-          node --version && echo "✓ Node.js installed"
-          pnpm --version && echo "✓ pnpm installed"
+          node --version
+          echo "✓ Node.js installed"
+          pnpm --version
+          echo "✓ pnpm installed"
 
           echo "Checking Python tools..."
-          which pre-commit && echo "✓ pre-commit installed"
+          which pre-commit
+          echo "✓ pre-commit installed"
 
           echo "Checking Rust toolchain..."
           source "$HOME/.cargo/env"
-          rustc --version && echo "✓ rustc installed"
-          cargo --version && echo "✓ cargo installed"
-          rustup run stable rustc --version && echo "✓ stable toolchain installed"
-          rustup run nightly rustc --version && echo "✓ nightly toolchain installed"
+          rustc --version
+          echo "✓ rustc installed"
+          cargo --version
+          echo "✓ cargo installed"
+          rustup run stable rustc --version
+          echo "✓ stable toolchain installed"
+          rustup run nightly rustc --version
+          echo "✓ nightly toolchain installed"
 
           echo "Checking Rust tools in ~/.local/bin..."
-          test -f "$HOME/.local/bin/bat" && echo "✓ bat installed"
-          test -f "$HOME/.local/bin/rg" && echo "✓ ripgrep installed"
-          test -f "$HOME/.local/bin/just" && echo "✓ just installed"
-          test -f "$HOME/.local/bin/tokei" && echo "✓ tokei installed"
+          test -f "$HOME/.local/bin/bat"
+          echo "✓ bat installed"
+          test -f "$HOME/.local/bin/rg"
+          echo "✓ ripgrep installed"
+          test -f "$HOME/.local/bin/just"
+          echo "✓ just installed"
+          test -f "$HOME/.local/bin/tokei"
+          echo "✓ tokei installed"
+
+          "$HOME/.local/bin/disk-saver" --version
 
           echo "Checking SSH setup..."
-          test -f "$HOME/.ssh/id_ed25519" && echo "✓ SSH key generated"
-          test -f "$HOME/.gitconfig" && echo "✓ .gitconfig exists"
+          test -f "$HOME/.ssh/id_ed25519"
+          echo "✓ SSH key generated"
+          test -f "$HOME/.gitconfig"
+          echo "✓ .gitconfig exists"
 
           echo "Checking SSH key sync setup..."
-          test -f "$HOME/.local/bin/sync-ssh-keys" && echo "✓ sync-ssh-keys script installed"
-          test -x "$HOME/.local/bin/sync-ssh-keys" && echo "✓ sync-ssh-keys is executable"
-          "$HOME/.local/bin/sync-ssh-keys" && echo "✓ sync-ssh-keys executed successfully"
-          grep -q "^ssh-" "$HOME/.ssh/authorized_keys" && echo "✓ authorized_keys contains SSH keys"
+          test -f "$HOME/.local/bin/sync-ssh-keys"
+          echo "✓ sync-ssh-keys script installed"
+          test -x "$HOME/.local/bin/sync-ssh-keys"
+          echo "✓ sync-ssh-keys is executable"
+          "$HOME/.local/bin/sync-ssh-keys"
+          echo "✓ sync-ssh-keys executed successfully"
+          grep -q "^ssh-" "$HOME/.ssh/authorized_keys"
+          echo "✓ authorized_keys contains SSH keys"
 
           echo "=== All verifications passed ==="
 
@@ -154,46 +180,69 @@ jobs:
           echo "=== Verifying installed tools ==="
 
           echo "Checking zsh config (linked from dotfiles)..."
-          test -f "$HOME/.zshrc" && echo "✓ .zshrc exists"
-          test -L "$HOME/.oh-my-zsh" && echo "✓ .oh-my-zsh is symlinked"
+          test -f "$HOME/.zshrc"
+          echo "✓ .zshrc exists"
+          test -L "$HOME/.oh-my-zsh"
+          echo "✓ .oh-my-zsh is symlinked"
 
           echo "Checking oh-my-zsh..."
-          test -d "$HOME/.oh-my-zsh" && echo "✓ oh-my-zsh installed"
+          test -d "$HOME/.oh-my-zsh"
+          echo "✓ oh-my-zsh installed"
 
           echo "Checking Node.js..."
           export NVM_DIR="$HOME/.nvm"
           [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-          node --version && echo "✓ Node.js installed"
-          pnpm --version && echo "✓ pnpm installed"
+          node --version
+          echo "✓ Node.js installed"
+          pnpm --version
+          echo "✓ pnpm installed"
 
           echo "Checking Python tools..."
-          which pre-commit && echo "✓ pre-commit installed"
+          which pre-commit
+          echo "✓ pre-commit installed"
 
           echo "Checking Rust toolchain..."
           source "$HOME/.cargo/env"
-          rustc --version && echo "✓ rustc installed"
-          cargo --version && echo "✓ cargo installed"
-          rustup run stable rustc --version && echo "✓ stable toolchain installed"
-          rustup run nightly rustc --version && echo "✓ nightly toolchain installed"
+          rustc --version
+          echo "✓ rustc installed"
+          cargo --version
+          echo "✓ cargo installed"
+          rustup run stable rustc --version
+          echo "✓ stable toolchain installed"
+          rustup run nightly rustc --version
+          echo "✓ nightly toolchain installed"
 
           echo "Checking Rust tools in ~/.local/bin..."
-          test -f "$HOME/.local/bin/bat" && echo "✓ bat installed"
-          test -f "$HOME/.local/bin/rg" && echo "✓ ripgrep installed"
-          test -f "$HOME/.local/bin/just" && echo "✓ just installed"
-          test -f "$HOME/.local/bin/tokei" && echo "✓ tokei installed"
+          test -f "$HOME/.local/bin/bat"
+          echo "✓ bat installed"
+          test -f "$HOME/.local/bin/rg"
+          echo "✓ ripgrep installed"
+          test -f "$HOME/.local/bin/just"
+          echo "✓ just installed"
+          test -f "$HOME/.local/bin/tokei"
+          echo "✓ tokei installed"
+
+          "$HOME/.local/bin/disk-saver" --version
 
           echo "Checking SSH setup..."
-          test -f "$HOME/.ssh/id_ed25519" && echo "✓ SSH key generated"
-          test -f "$HOME/.gitconfig" && echo "✓ .gitconfig exists"
+          test -f "$HOME/.ssh/id_ed25519"
+          echo "✓ SSH key generated"
+          test -f "$HOME/.gitconfig"
+          echo "✓ .gitconfig exists"
 
           echo "Checking SSH key sync setup..."
-          test -f "$HOME/.local/bin/sync-ssh-keys" && echo "✓ sync-ssh-keys script installed"
-          test -x "$HOME/.local/bin/sync-ssh-keys" && echo "✓ sync-ssh-keys is executable"
-          "$HOME/.local/bin/sync-ssh-keys" && echo "✓ sync-ssh-keys executed successfully"
-          grep -q "^ssh-" "$HOME/.ssh/authorized_keys" && echo "✓ authorized_keys contains SSH keys"
+          test -f "$HOME/.local/bin/sync-ssh-keys"
+          echo "✓ sync-ssh-keys script installed"
+          test -x "$HOME/.local/bin/sync-ssh-keys"
+          echo "✓ sync-ssh-keys is executable"
+          "$HOME/.local/bin/sync-ssh-keys"
+          echo "✓ sync-ssh-keys executed successfully"
+          grep -q "^ssh-" "$HOME/.ssh/authorized_keys"
+          echo "✓ authorized_keys contains SSH keys"
 
           echo "Checking macOS-specific setup..."
-          test -f "$HOME/.gnupg/gpg-agent.conf" && echo "✓ GPG agent configured"
+          test -f "$HOME/.gnupg/gpg-agent.conf"
+          echo "✓ GPG agent configured"
 
           echo "=== All verifications passed ==="
 
@@ -226,7 +275,7 @@ jobs:
           dnf install -y sudo
           echo "testuser ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
 
-          su - testuser -c "cd $GITHUB_WORKSPACE && ./configure.sh 2>&1 | tee /home/testuser/install.log"
+          su - testuser -c "set -eo pipefail; cd '$GITHUB_WORKSPACE' && CI=true ./configure.sh 2>&1 | tee /home/testuser/install.log"
           cp /home/testuser/install.log ./install.log
         env:
           CI: true
@@ -242,28 +291,40 @@ jobs:
       - name: Verify installation
         run: |
           su - testuser -c '
+            set -eo pipefail
             echo "=== Verifying installed tools ==="
 
             echo "Checking zsh config..."
-            test -f "$HOME/.zshrc" && echo "✓ .zshrc exists"
+            test -f "$HOME/.zshrc"
+            echo "✓ .zshrc exists"
 
             echo "Checking oh-my-zsh..."
-            test -d "$HOME/.oh-my-zsh" && echo "✓ oh-my-zsh installed"
+            test -d "$HOME/.oh-my-zsh"
+            echo "✓ oh-my-zsh installed"
 
             echo "Checking Node.js..."
             export NVM_DIR="$HOME/.nvm"
             [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-            node --version && echo "✓ Node.js installed"
+            node --version
+            echo "✓ Node.js installed"
 
             echo "Checking Rust tools..."
-            test -f "$HOME/.local/bin/bat" && echo "✓ bat installed"
-            test -f "$HOME/.local/bin/rg" && echo "✓ ripgrep installed"
+            test -f "$HOME/.local/bin/bat"
+            echo "✓ bat installed"
+            test -f "$HOME/.local/bin/rg"
+            echo "✓ ripgrep installed"
+
+            "$HOME/.local/bin/disk-saver" --version
 
             echo "Checking SSH key sync setup..."
-            test -f "$HOME/.local/bin/sync-ssh-keys" && echo "✓ sync-ssh-keys script installed"
-            test -x "$HOME/.local/bin/sync-ssh-keys" && echo "✓ sync-ssh-keys is executable"
-            "$HOME/.local/bin/sync-ssh-keys" && echo "✓ sync-ssh-keys executed successfully"
-            grep -q "^ssh-" "$HOME/.ssh/authorized_keys" && echo "✓ authorized_keys contains SSH keys"
+            test -f "$HOME/.local/bin/sync-ssh-keys"
+            echo "✓ sync-ssh-keys script installed"
+            test -x "$HOME/.local/bin/sync-ssh-keys"
+            echo "✓ sync-ssh-keys is executable"
+            "$HOME/.local/bin/sync-ssh-keys"
+            echo "✓ sync-ssh-keys executed successfully"
+            grep -q "^ssh-" "$HOME/.ssh/authorized_keys"
+            echo "✓ authorized_keys contains SSH keys"
 
             echo "=== Verifications complete ==="
           '

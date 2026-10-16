@@ -193,7 +193,7 @@ install_sys_packages() {
 
         if [ -f /etc/rocky-release ]; then
             sudo dnf install -y epel-release
-            /usr/bin/crb enable
+            sudo /usr/bin/crb enable
         fi
 
         sudo dnf install -y python3-pip pipx zsh tmux curl git gpg tar nano
