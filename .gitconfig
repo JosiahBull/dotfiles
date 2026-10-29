@@ -41,3 +41,4 @@
 	enabled = true
 [core]
 	editor = vim
+	excludesfile = ~/.dotfiles/.gitignore_global
