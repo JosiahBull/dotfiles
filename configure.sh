@@ -211,7 +211,9 @@ install_sys_packages() {
         if ! command -v curl &> /dev/null; then
             sudo dnf install -y curl
         fi
-        sudo dnf install -y python3-pip pipx zsh tmux git gpg tar nano openssh-clients
+        # Node 26+ (installed through nvm) needs libatomic, which Rocky's base
+        # image does not include.
+        sudo dnf install -y python3-pip pipx zsh tmux git gpg tar nano openssh-clients libatomic
 
     elif command -v apt-get &> /dev/null; then
         log "Debian/Ubuntu detected..."
