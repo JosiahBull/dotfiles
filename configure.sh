@@ -303,6 +303,27 @@ setup_node() {
 # ZSH & DOTFILES
 # ==============================================================================
 
+setup_zed_cli() {
+    [ "$OS" = "Mac" ] || return 0
+
+    local cli
+    for cli in /Applications/Zed.app/Contents/MacOS/cli "$HOME_DIR/Applications/Zed.app/Contents/MacOS/cli"; do
+        if [ -x "$cli" ]; then
+            local dest="$LOCAL_BIN/zed"
+            if [ -e "$dest" ] && [ ! -L "$dest" ]; then
+                warn "$dest already exists; leaving it unchanged."
+                return
+            fi
+            ensure_dir "$LOCAL_BIN"
+            ln -sfn "$cli" "$dest"
+            log "Linked Zed CLI at $dest"
+            return
+        fi
+    done
+
+    log "Zed is not installed; skipping CLI setup."
+}
+
 setup_dotfiles() {
     log "Setting up dotfiles..."
 
@@ -812,6 +833,7 @@ main() {
     install_python_tools
     setup_node
     setup_dotfiles
+    setup_zed_cli
     setup_gpg
     setup_ssh_git
     setup_ssh_key_sync
