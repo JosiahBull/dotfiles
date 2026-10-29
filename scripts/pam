@@ -1,0 +1,467 @@
+#!/usr/bin/env zsh
+
+# Author: Josiah Bull <josiah.bull7@gmail.com>
+# License: MIT/Apache-2.0
+
+# Request a GCP Privileged Access Manager grant: pick an entitlement, duration
+# and resource with fzf, then activate it. `pam -h` lists the flags.
+
+pam () {
+    emulate -L zsh
+    setopt no_notify no_monitor pipe_fail
+    zmodload zsh/datetime
+    zmodload -F zsh/stat b:zstat
+    _pam_cache_dir () {
+        local d="${XDG_CACHE_HOME:-$HOME/.cache}/pam"
+        [[ -d $d ]] || mkdir -p "$d"
+        print -r -- "$d"
+    }
+    _pam_fresh () {
+        [[ -f "$1" ]] || return 1
+        local -a mtime
+        zstat -A mtime +mtime -- "$1" || return 1
+        (( EPOCHSECONDS - mtime[1] < $2 ))
+    }
+    _pam_secs () {
+        local d="${1:l}" n="${1:l}"
+        n="${n%[smh]}"
+        [[ "$n" == <-> ]] || return 1
+        case "$d" in
+            (*h) print -- $(( n * 3600 )) ;;
+            (*m) print -- $(( n * 60 )) ;;
+            (*) print -- $(( n )) ;;
+        esac
+    }
+    _pam_human () {
+        local -i s=$1
+        if (( s % 3600 == 0 ))
+        then
+            print -- "$(( s / 3600 ))h"
+        elif (( s < 3600 ))
+        then
+            print -- "$(( s / 60 ))m"
+        else
+            print -- "$(( s / 3600 ))h$(( (s % 3600) / 60 ))m"
+        fi
+    }
+    _pam_scopes () {
+        local cache="$1"
+        if _pam_fresh "$cache" 86400
+        then
+            cat "$cache"
+            return 0
+        fi
+        local org
+        org=$(gcloud organizations list --format='value(ID)' 2>/dev/null | head -1)
+        if [[ -z $org ]]
+        then
+            print -u2 "pam: no organization visible to $(gcloud config get-value account 2>/dev/null)"
+            return 1
+        fi
+        local -a out=("organization\t$org\torg") frontier=("--organization=$org|") next
+        local tmp parent kid i line ppath fid fname fpth
+        tmp=$(mktemp -d)  || return 1
+        while (( ${#frontier} ))
+        do
+            next=()
+            i=0
+            for parent in "${frontier[@]}"
+            do
+                (( i++ ))
+                print -r -- "${parent#*|}" > "$tmp/$i.path"
+                gcloud resource-manager folders list "${parent%%|*}" --format='value(name,displayName)' 2> /dev/null > "$tmp/$i.out" &
+            done
+            wait
+            for i in {1..${#frontier}}
+            do
+                [[ -f "$tmp/$i.out" ]] || continue
+                ppath=$(cat "$tmp/$i.path")
+                for line in ${(f)"$(cat "$tmp/$i.out")"}
+                do
+                    [[ -z $line ]] && continue
+                    fid="${line%%$'\t'*}"
+                    fname="${line#*$'\t'}"
+                    fpth="${ppath:+$ppath/}$fname"
+                    out+=("folder\t$fid\t$fpth")
+                    next+=("--folder=$fid|$fpth")
+                done
+            done
+            frontier=("${next[@]}")
+        done
+        rm -rf "$tmp"
+        local proj
+        proj=$(gcloud config get-value project 2>/dev/null)
+        [[ -n $proj && $proj != "(unset)" ]] && out+=("project\t$proj\t$proj")
+        local extra
+        for extra in ${(s:,:)PAM_EXTRA_SCOPES}
+        do
+            [[ -z $extra ]] && continue
+            case "$extra" in
+                (projects/*) out+=("project\t${extra#projects/}\t${extra#projects/}")  ;;
+                (folders/*) out+=("folder\t${extra#folders/}\t${extra#folders/}")  ;;
+                (organizations/*) out+=("organization\t${extra#organizations/}\torg")  ;;
+                (*) print -u2 "pam: ignoring malformed PAM_EXTRA_SCOPES entry '$extra'" ;;
+            esac
+        done
+        printf '%b\n' "${out[@]}" > "$cache"
+        cat "$cache"
+    }
+    _pam_entitlements () {
+        local cache="$1" access_type="$2" scopes_file="$3"
+        local tmp s out kind id
+        local -i i=0 running=0 batch=12
+        tmp=$(mktemp -d)  || return 1
+        for s in ${(f)"$(cat "$scopes_file")"}
+        do
+            [[ -z $s ]] && continue
+            kind="${s%%$'\t'*}"
+            id="${${s#*$'\t'}%%$'\t'*}"
+            (( i++ ))
+            gcloud beta pam entitlements search "--${kind}=${id}" --location=global --caller-access-type="$access_type" --format=json 2> /dev/null > "$tmp/$i.json" &
+            (( ++running >= batch )) && {
+                wait
+                running=0
+            }
+        done
+        wait
+        for out in "$tmp"/*.json(.N)
+        do
+            [[ -s $out ]] || print -- '[]' > "$out"
+        done
+        jq -s 'add // [] | map(select(.name)) | sort_by(.name)' "$tmp"/*.json(.N) > "$cache"
+        local rc=$?
+        rm -rf "$tmp"
+        return $rc
+    }
+    _pam_scope_map () {
+        awk -F'\t' '
+      BEGIN { printf "{" }
+      NF>=3 { k=$1
+              if (k=="organization") pfx="organizations"
+              else if (k=="folder")  pfx="folders"
+              else                   pfx="projects"
+              if (n++) printf ","
+              printf "\"%s/%s\":\"%s\"", pfx, $2, $3 }
+      END { printf "}" }' "$1"
+    }
+    _pam_preview_script () {
+        local dest="$1" cache="$2" smap="$3"
+        cat > "$dest" <<EOF
+#!/usr/bin/env zsh
+# generated by pam(); fzf previews run outside the shell's function scope
+name="\$1"
+[[ -z \$name ]] && exit 0
+jq -r --arg n "\$name" --slurpfile m '$smap' '
+  (\$m[0][(\$n | sub("/locations/.*"; ""))] // "?") as \$scope
+  | .[] | select(.name == \$n) |
+  "  \(\$n | split("/") | last)",
+  "  scope        : \(\$scope)",
+  "  max duration : \(.maxRequestDuration | rtrimstr("s")) sec",
+  "  approval     : \(if .approvalWorkflow then "REQUIRED" else "none (self-activating)" end)",
+  "  justification: \(if .requesterJustificationConfig.unstructured then "required" else "optional" end)",
+  "  resource     : \(.privilegedAccess.gcpIamAccess.resource | sub("^//[^/]+/"; ""))",
+  "",
+  "  roles:",
+  (.privilegedAccess.gcpIamAccess.roleBindings[] | "    \(.role)")
+' '$cache'
+print -- ""
+print -- "  your grants:"
+gcloud beta pam grants search --entitlement="\$name" \\
+  --caller-relationship=had-created --format=json 2>/dev/null \\
+  | jq -r 'if length == 0 then "    (none)" else
+             (sort_by(.createTime) | reverse | .[0:5][]
+              | "    \(.state)  \(.createTime[0:16])  \(.justification.unstructuredJustification // "-")") end' \\
+  || print -- "    (lookup failed)"
+EOF
+    }
+    _pam_usage () {
+        print -- 'pam [entitlement] -j <justification> [-d 2h] [-R proj] [-w] [-r] [-n] [-y]'
+        print -- 'pam --list'
+        print -- ''
+        print -- '  -j, --justification  required; PAM rejects grants without one'
+        print -- '  -d, --duration       45m|2h|5400s; skips the picker, errors if over max'
+        print -- '  -R, --resource       narrow to e.g. projects/my-project'
+        print -- '  -w, --wide           grant the full entitlement scope, no narrowing'
+        print -- '  -r, --refresh        re-scan the hierarchy (entitlement cache TTL 1h)'
+        print -- '  -n, --dry-run        print the gcloud command, run nothing'
+        print -- '  -y, --yes            skip the confirmation'
+        print -- '      --list           your grants across every entitlement'
+        print -- '      --approver       list entitlements you approve, not request'
+    }
+    local justification="" duration="" filter="" access_type="grant-requester"
+    local resource_override=""
+    local -i refresh=0 dry_run=0 assume_yes=0 do_list=0 force_wide=0
+    while (( $# ))
+    do
+        case "$1" in
+            (-j | --justification) justification="$2"
+                shift 2 ;;
+            (-d | --duration) duration="$2"
+                shift 2 ;;
+            (-R | --resource) resource_override="$2"
+                shift 2 ;;
+            (-w | --wide) force_wide=1
+                shift ;;
+            (-r | --refresh) refresh=1
+                shift ;;
+            (-n | --dry-run) dry_run=1
+                shift ;;
+            (-y | --yes) assume_yes=1
+                shift ;;
+            (--list) do_list=1
+                shift ;;
+            (--approver) access_type="grant-approver"
+                shift ;;
+            (-h | --help) _pam_usage
+                return 0 ;;
+            (-*) print -u2 "pam: unknown flag $1"
+                return 2 ;;
+            (*) filter="$1"
+                shift ;;
+        esac
+    done
+    local dep
+    for dep in gcloud fzf jq
+    do
+        command -v $dep > /dev/null 2>&1 || {
+            print -u2 "pam: $dep not found"
+            return 1
+        }
+    done
+    local acct cdir
+    acct=$(gcloud config get-value account 2>/dev/null)
+    if [[ -z $acct || $acct == "(unset)" ]]
+    then
+        print -u2 "pam: no active gcloud account; run 'gcloud auth login'"
+        return 1
+    fi
+    cdir=$(_pam_cache_dir)  || return 1
+    local key="${acct//[^a-zA-Z0-9]/_}"
+    local scopes_cache="$cdir/scopes-$key.tsv"
+    local ent_cache="$cdir/entitlements-$key-$access_type.json"
+    (( refresh )) && rm -f "$scopes_cache" "$ent_cache"
+    _pam_scopes "$scopes_cache" > /dev/null || return 1
+    if ! _pam_fresh "$ent_cache" 3600
+    then
+        print -u2 -n "pam: scanning $(wc -l < "$scopes_cache" | tr -d ' ') scopes... "
+        _pam_entitlements "$ent_cache" "$access_type" "$scopes_cache" || {
+            print -u2 "failed"
+            return 1
+        }
+        print -u2 "done"
+    fi
+    local -i count
+    count=$(jq 'length' "$ent_cache")
+    if (( count == 0 ))
+    then
+        print -u2 "pam: no entitlements found for $acct ($access_type)"
+        return 1
+    fi
+    local smap
+    smap=$(_pam_scope_map "$scopes_cache")
+    if (( do_list ))
+    then
+        local tmp
+        tmp=$(mktemp -d)  || return 1
+        cat > "$tmp/list.jq" <<'JQEOF'
+def hdur: (.requestedDuration | rtrimstr("s") | tonumber)
+          | if . % 3600 == 0 then "\(. / 3600)h"
+            elif . < 3600 then "\(. / 60)m"
+            else "\(. / 3600 | floor)h\((. % 3600) / 60)m" end;
+def rem: if .state == "ACTIVE" and .auditTrail.accessGrantTime then
+           ((((.auditTrail.accessGrantTime[0:19] + "Z") | fromdateiso8601)
+             + (.requestedDuration | rtrimstr("s") | tonumber) - now) / 60 | floor) as $m
+           | if $m > 0 then "\($m)m" else "expiring" end
+         else "-" end;
+.[]? | [$e, $s, .state, hdur, rem, .createTime[0:16],
+        (.justification.unstructuredJustification // "-")] | @tsv
+JQEOF
+        local n scope_path
+        local -i i=0 running=0
+        for n in ${(f)"$(jq -r '.[].name' "$ent_cache")"}
+        do
+            (( i++ ))
+            scope_path=$(print -r -- "$smap" | jq -r --arg p "${n%/locations/*}" '.[$p] // $p')
+            gcloud beta pam grants search --entitlement="$n" --caller-relationship=had-created --format=json 2> /dev/null | jq -r --arg e "${n:t}" --arg s "$scope_path" -f "$tmp/list.jq" > "$tmp/$i.row" &
+            (( ++running >= 12 )) && {
+                wait
+                running=0
+            }
+        done
+        wait
+        local rows
+        rows=$(cat "$tmp"/*.row 2>/dev/null)
+        rm -rf "$tmp"
+        if [[ -z $rows ]]
+        then
+            print -- "no grants found for $acct"
+            return 0
+        fi
+        {
+            print -- "ENTITLEMENT\tSCOPE\tSTATE\tDURATION\tREMAINING\tCREATED\tJUSTIFICATION"
+            print -r -- "$rows" | sort -t$'\t' -k3,3 -k6,6r
+        } | column -t -s$'\t'
+        return 0
+    fi
+    if [[ -z $justification ]]
+    then
+        print -u2 "pam: -j/--justification is required (every entitlement sets requesterJustificationConfig.unstructured)"
+        return 2
+    fi
+    local tmp
+    tmp=$(mktemp -d)  || return 1
+    print -r -- "$smap" > "$tmp/smap.json"
+    _pam_preview_script "$tmp/preview.zsh" "$ent_cache" "$tmp/smap.json"
+    local ent
+    ent=$(jq -r --argjson smap "$smap" '
+    def scope: (.name | sub("/locations/.*"; "")) as $p | ($smap[$p] // $p);
+    def dur: (.maxRequestDuration | rtrimstr("s") | tonumber)
+             | if . % 3600 == 0 then "\(. / 3600)h"
+               elif . < 3600 then "\(. / 60)m"
+               else "\(. / 3600 | floor)h\((. % 3600) / 60)m" end;
+    .[] | [ .name, (.name | split("/") | last), scope, dur,
+            ([.privilegedAccess.gcpIamAccess.roleBindings[].role | sub("^roles/"; "")]
+             | if length > 3 then (.[0:3] | join(", ")) + " +\(length - 3)" else join(", ") end)
+          ] | @tsv' "$ent_cache" \
+    | sort -t$'\t' -k3,3 -k2,2 \
+    | awk -F'\t' '
+        { n++; a[n]=$0
+          if (length($2)>w2) w2=length($2)
+          if (length($3)>w3) w3=length($3)
+          if (length($4)>w4) w4=length($4) }
+        END { for (i=1;i<=n;i++) { split(a[i],f,"\t")
+                printf "%s\t%-*s  %-*s  %-*s  %s\n", f[1], w2, f[2], w3, f[3], w4, f[4], f[5] } }' \
+    | fzf --height=80% --reverse --delimiter=$'\t' --with-nth=2 --accept-nth=1 \
+          --prompt='entitlement > ' --header="account=$acct  ($count available)" \
+          --query="$filter" --select-1 \
+          --preview="zsh '$tmp/preview.zsh' {1}" --preview-window=right:52%:wrap)
+    if [[ -z $ent ]]
+    then
+        rm -rf "$tmp"
+        return 1
+    fi
+    rm -rf "$tmp"
+    local -i maxs
+    maxs=$(jq -r --arg n "$ent" '.[] | select(.name == $n)
+    | .maxRequestDuration | rtrimstr("s")' "$ent_cache")
+    (( maxs > 0 )) || {
+        print -u2 "pam: could not read maxRequestDuration for ${ent:t}"
+        return 1
+    }
+    local -i secs
+    if [[ -n $duration ]]
+    then
+        secs=$(_pam_secs "$duration")  || {
+            print -u2 "pam: bad duration '$duration' (expected 45m, 2h, 5400s)"
+            return 2
+        }
+        if (( secs > maxs ))
+        then
+            print -u2 "pam: $duration exceeds maxRequestDuration for ${ent:t} ($(_pam_human $maxs))"
+            return 2
+        fi
+    else
+        local -a opts=()
+        local -i p
+        for p in 900 1800 3600 7200 14400 28800
+        do
+            (( p < maxs )) && opts+=("$(_pam_human $p)")
+        done
+        opts+=("$(_pam_human $maxs)  (max)")
+        local pick
+        pick=$(print -rl -- "${opts[@]}" | fzf --height=~40% --reverse \
+             --prompt='duration > ' --header="${ent:t}  max $(_pam_human $maxs)" \
+             --bind=load:last)
+        [[ -z $pick ]] && return 1
+        secs=$(_pam_secs "${${pick%%  \(max\)}// /}")  || return 1
+    fi
+    local ent_resource req_resource=""
+    ent_resource=$(jq -r --arg n "$ent" '.[] | select(.name == $n)
+    | .privilegedAccess.gcpIamAccess.resource | sub("^//[^/]+/"; "")' "$ent_cache")
+    if [[ -n $resource_override ]]
+    then
+        req_resource="$resource_override"
+    elif (( ! force_wide )) && [[ $ent_resource == folders/* ]]
+    then
+        local -a kids
+        kids=(${(f)"$(gcloud projects list --filter="parent.id=${ent_resource#folders/}" \
+                    --format='value(projectId)' 2>/dev/null)"})
+        kids=(${kids:#})
+        if (( ${#kids} == 1 ))
+        then
+            req_resource="projects/${kids[1]}"
+        elif (( ${#kids} > 1 ))
+        then
+            local pick_r
+            pick_r=$(print -rl -- "${kids[@]}" "** entire folder: $ent_resource **" \
+               | fzf --height=~40% --reverse --prompt='resource > ' \
+                     --header="narrow ${ent:t} to which project?")
+            [[ -z $pick_r ]] && return 1
+            [[ $pick_r == '**'* ]] || req_resource="projects/$pick_r"
+        fi
+    fi
+    local -a cmd=(gcloud beta pam grants create --entitlement="$ent" --requested-duration="${secs}s" --justification="$justification")
+    [[ -n $req_resource ]] && cmd+=(--requested-resources="$req_resource")
+    cmd+=(--format=json)
+    local scope_path
+    scope_path=$(print -r -- "$smap" | jq -r --arg p "${ent%/locations/*}" '.[$p] // $p')
+    print -- ""
+    print -- "  entitlement  : ${ent:t}"
+    print -- "  scope        : $scope_path"
+    if [[ -n $req_resource ]]
+    then
+        print -- "  resource     : $req_resource"
+    else
+        print -- "  resource     : $ent_resource   ** ENTIRE ${${${ent_resource%%/*}%s}:u} **"
+    fi
+    print -- "  duration     : $(_pam_human $secs) (${secs}s, max $(_pam_human $maxs))"
+    print -- "  justification: $justification"
+    jq -r --arg n "$ent" '.[] | select(.name == $n)
+    | "  roles        : "
+      + ([.privilegedAccess.gcpIamAccess.roleBindings[].role] | join("\n                 "))' "$ent_cache"
+    print -- ""
+    if (( dry_run ))
+    then
+        print -- "dry-run, not executing:"
+        print -r -- "  ${(j: :)${(@q-)cmd}}"
+        return 0
+    fi
+    if (( ! assume_yes ))
+    then
+        if ! read -q "?activate this grant? [y/N] "
+        then
+            print -- ""
+            print -- "aborted"
+            return 1
+        fi
+        print -- ""
+    fi
+    local out
+    out=$("${cmd[@]}" 2>&1)  || {
+        print -u2 -r -- "$out"
+        return 1
+    }
+    local grant state
+    grant=$(print -r -- "$out" | jq -r '.name // empty' 2>/dev/null)
+    state=$(print -r -- "$out" | jq -r '.state // empty' 2>/dev/null)
+    [[ -z $grant ]] && {
+        print -r -- "$out"
+        return 1
+    }
+    local -i tries=0
+    while [[ $state == (ACTIVATING|SCHEDULED|APPROVAL_AWAITED) ]] && (( tries < 15 ))
+    do
+        sleep 2
+        (( tries++ ))
+        state=$(gcloud beta pam grants describe "$grant" --format='value(state)' 2>/dev/null)
+    done
+    print -- "grant  : ${grant:t}"
+    print -- "state  : $state"
+    if [[ $state == ACTIVE ]]
+    then
+        print -- "expires: $(strftime '%H:%M:%S' $(( EPOCHSECONDS + secs ))) ($(_pam_human $secs) from now)"
+        print -- "note   : IAM propagation lags by seconds to minutes; retry once if the first call is denied."
+    fi
+}
+
+pam "$@"
