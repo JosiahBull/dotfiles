@@ -14,11 +14,21 @@ source "$current_dir"/lib/release-apps.sh
 
 set_log "update-all"
 
-# Update System
-# Ubuntu
+is_macos=false
 if [ "$(uname -s)" = Darwin ]; then
+  is_macos=true
+fi
+
+# Update System
+# macOS
+if [ "$is_macos" = true ]; then
+  if ! command -v brew &> /dev/null; then
+    exit_error "Homebrew not found"
+  fi
   run_cmd_wrap brew update
   run_cmd_wrap brew upgrade
+  run_cmd_wrap brew cleanup
+# Ubuntu
 elif [ -f /etc/lsb-release ]; then
   cmd=("sudo" "apt-get" "update")
   run_cmd_wrap "${cmd[@]}"
@@ -30,10 +40,9 @@ elif [ -f /etc/lsb-release ]; then
   run_cmd_wrap "${cmd[@]}"
   cmd=("sudo" "apt-get" "autoclean")
   run_cmd_wrap "${cmd[@]}"
-# Fedora
-elif [ -f /etc/fedora-release ]; then
-  cmd=("sudo" "dnf" "check-update")
-  run_cmd_wrap "${cmd[@]}"
+# Fedora, Rocky and other dnf-based distributions
+elif [ -f /etc/fedora-release ] || [ -f /etc/rocky-release ] || command -v dnf &> /dev/null; then
+  # --refresh replaces dnf check-update, which exits 100 when updates exist.
   cmd=("sudo" "dnf" "upgrade" "--refresh" "-y")
   run_cmd_wrap "${cmd[@]}"
   cmd=("sudo" "dnf" "autoremove" "-y")
@@ -47,8 +56,17 @@ fi
 # Update installed personal applications from their latest GitHub releases.
 update_personal_apps
 
+# Update Mac App Store apps
+if [ "$is_macos" = true ] && command -v mas &> /dev/null; then
+  run_cmd_wrap mas upgrade
+fi
+
+# macOS updates need a restart, so list them rather than installing
+if [ "$is_macos" = true ]; then
+  debug_cmd "softwareupdate --list"
+  softwareupdate --list || warn "softwareupdate --list failed"
 # Update device firmware
-if [ -f /usr/bin/fwupdmgr ]; then
+elif [ -f /usr/bin/fwupdmgr ]; then
   cmd=("sudo" "fwupdmgr" "refresh" "--force")
   run_cmd_wrap "${cmd[@]}"
   cmd=("sudo" "fwupdmgr" "update" "--no-reboot-check" "--assume-yes")
@@ -71,7 +89,7 @@ fi
 
 # Update Pip if not externally managed, by checking if /usr/lib/python3.12/EXTERNALLY-MANAGED exists
 externally_managed_exists=1
-if [ "$(uname -s)" != Darwin ]; then
+if [ "$is_macos" = false ]; then
   externally_managed_exists=$(find /usr/lib/ -type f -name "EXTERNALLY-MANAGED" | wc -l)
 fi
 if [ "$externally_managed_exists" -eq 0 ]; then
@@ -100,10 +118,16 @@ if which npm &> /dev/null; then
   run_cmd_wrap "${cmd[@]}"
 fi
 
-# Update Gcloud
-if which gcloud &> /dev/null; then
-  debug_cmd "gcloud components update"
-  echo "yes" | "$HOME"/.google-cloud-sdk/bin/gcloud components update
+# Update Gcloud. Linux package-manager installs disable the component manager,
+# so only update the user install there; the Homebrew cask allows it.
+gcloud_bin=""
+if [ -x "$HOME/.google-cloud-sdk/bin/gcloud" ]; then
+  gcloud_bin="$HOME/.google-cloud-sdk/bin/gcloud"
+elif [ "$is_macos" = true ] && command -v gcloud &> /dev/null; then
+  gcloud_bin="$(command -v gcloud)"
+fi
+if [ -n "$gcloud_bin" ]; then
+  run_cmd_wrap "$gcloud_bin" components update --quiet
 fi
 
 exit_success
