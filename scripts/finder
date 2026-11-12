@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+# Open the system file manager at a path (default: current directory). Files
+# are revealed in their parent folder, selected where the file manager allows.
+# Usage: finder [path...]
+
+set -o errexit -o pipefail -o nounset
+
+# Launch detached so file managers that stay in the foreground don't hold the shell.
+launch() {
+    nohup "$@" > /dev/null 2>&1 &
+}
+
+open_dir() {
+    case "$os" in
+        Darwin) open "$1" ;;
+        *)
+            if command -v xdg-open > /dev/null; then
+                launch xdg-open "$1"
+            elif command -v gio > /dev/null; then
+                launch gio open "$1"
+            else
+                echo "finder: no file manager found (install xdg-utils)" >&2
+                exit 1
+            fi
+            ;;
+    esac
+}
+
+reveal_file() {
+    case "$os" in
+        Darwin) open -R "$1" ;;
+        *)
+            if command -v nautilus > /dev/null; then
+                launch nautilus --select "$1"
+            elif command -v dolphin > /dev/null; then
+                launch dolphin --select "$1"
+            elif command -v nemo > /dev/null; then
+                launch nemo "$1"
+            elif command -v caja > /dev/null; then
+                launch caja --select "$1"
+            else
+                open_dir "$(dirname "$1")"
+            fi
+            ;;
+    esac
+}
+
+os="$(uname -s)"
+
+if [ "$#" -eq 0 ]; then
+    set -- .
+fi
+
+for target in "$@"; do
+    if [ ! -e "$target" ]; then
+        echo "finder: no such file or directory: $target" >&2
+        exit 1
+    fi
+    if [ -d "$target" ]; then
+        open_dir "$target"
+    else
+        reveal_file "$target"
+    fi
+done
