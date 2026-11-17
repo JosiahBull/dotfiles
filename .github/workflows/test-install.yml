@@ -253,7 +253,7 @@ jobs:
     if: github.event_name != 'workflow_dispatch' || github.event.inputs.os == 'all' || github.event.inputs.os == 'rocky-9'
     runs-on: ubuntu-latest
     container:
-      image: rockylinux:9
+      image: rockylinux:10
     timeout-minutes: 30
 
     steps:
